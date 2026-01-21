@@ -1,16 +1,71 @@
 'use client'
 
-import { useStore } from '@/lib/mock-data'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
-import { Users, Building2, UsersRound, Calendar, TrendingUp, AlertCircle } from 'lucide-react'
-import { computePlayer } from '@/lib/calculations'
+import { Users, Building2, UsersRound, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+interface Sponsor {
+  id: string
+  name: string
+  total_credits: number
+  credits_used: number
+  payment_status: string
+}
+
+interface Team {
+  id: string
+  event_type: string
+  withdrawn_at: string | null
+}
+
+interface Player {
+  id: string
+}
 
 export default function AdminDashboard() {
-  const { players, sponsors, teams, sponsorCredits, getTeamsWithPlayers } = useStore()
+  const [sponsors, setSponsors] = useState<Sponsor[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
+  const [players, setPlayers] = useState<Player[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const teamsWithPlayers = getTeamsWithPlayers()
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const [sponsorsRes, teamsRes, playersRes] = await Promise.all([
+        fetch('/api/sponsors'),
+        fetch('/api/teams'),
+        fetch('/api/players')
+      ])
+
+      if (sponsorsRes.ok) {
+        const data = await sponsorsRes.json()
+        setSponsors(data.sponsors || [])
+      }
+      if (teamsRes.ok) {
+        const data = await teamsRes.json()
+        setTeams(data.teams || [])
+        // Players come from teams API
+        setPlayers(data.players || [])
+      }
+      if (playersRes.ok) {
+        const data = await playersRes.json()
+        if (data.players?.length > 0) {
+          setPlayers(data.players)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   // Calculate stats
   const activeTeams = teams.filter(t => !t.withdrawn_at)
@@ -23,23 +78,25 @@ export default function AdminDashboard() {
   const paidSponsors = sponsors.filter(s => s.payment_status === 'paid')
   const pendingSponsors = sponsors.filter(s => s.payment_status === 'pending_offline' || s.payment_status === 'pending_online')
 
-  // GHIN status breakdown
-  const playersWithComputed = players.map(computePlayer)
-  const freshGhin = playersWithComputed.filter(p => p.ghin_status === 'fresh').length
-  const staleGhin = playersWithComputed.filter(p => p.ghin_status === 'stale').length
-  const missingGhin = playersWithComputed.filter(p => p.ghin_status === 'missing').length
-
-  // Flight breakdown for sat/sun
-  const teamsWithFlights = teamsWithPlayers.filter(t => t.event_type === 'sat_sun' && !t.withdrawn_at)
-  const flight1Count = teamsWithFlights.filter(t => t.flight === 1).length
-  const flight2Count = teamsWithFlights.filter(t => t.flight === 2).length
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Frogman Classic 2025 Overview</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 mt-1">Frogman Classic 2025 Overview</p>
+        </div>
+        <Button variant="outline" size="icon" onClick={fetchData}>
+          <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Main Stats */}
@@ -53,7 +110,7 @@ export default function AdminDashboard() {
             <CardContent>
               <div className="text-2xl font-bold">{players.length}</div>
               <p className="text-xs text-muted-foreground">
-                {freshGhin} fresh, {staleGhin} stale, {missingGhin} missing GHIN
+                Registered players
               </p>
             </CardContent>
           </Card>
@@ -89,20 +146,18 @@ export default function AdminDashboard() {
           </Card>
         </Link>
 
-        <Link href="/admin/tee-sheets">
-          <Card className="hover:shadow-md transition-shadow cursor-pointer">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Credits</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{usedCredits} / {totalCredits}</div>
-              <p className="text-xs text-muted-foreground">
-                {totalCredits - usedCredits} available
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Credits</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{usedCredits} / {totalCredits}</div>
+            <p className="text-xs text-muted-foreground">
+              {totalCredits - usedCredits} available
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Details Grid */}
@@ -118,56 +173,16 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Friday (4-5 player teams)</p>
-                  <p className="text-xs text-muted-foreground">
-                    {fridayTeams.reduce((sum, t) => {
-                      const tp = teamsWithPlayers.find(twp => twp.id === t.id)
-                      return sum + (tp?.players.length ?? 0)
-                    }, 0)} players
-                  </p>
+                  <p className="text-xs text-muted-foreground">Best ball format</p>
                 </div>
                 <div className="text-2xl font-bold">{fridayTeams.length}</div>
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium">Sat/Sun (2 player teams)</p>
-                  <p className="text-xs text-muted-foreground">
-                    Flight 1: {flight1Count}, Flight 2: {flight2Count}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Tournament format</p>
                 </div>
                 <div className="text-2xl font-bold">{satSunTeams.length}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* GHIN Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle>GHIN Status</CardTitle>
-            <CardDescription>Player handicap data freshness</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="success">Fresh</Badge>
-                  <span className="text-sm">Updated within 4 days</span>
-                </div>
-                <span className="font-bold">{freshGhin}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="warning">Stale</Badge>
-                  <span className="text-sm">Needs update</span>
-                </div>
-                <span className="font-bold">{staleGhin}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="error">Missing</Badge>
-                  <span className="text-sm">No GHIN data</span>
-                </div>
-                <span className="font-bold">{missingGhin}</span>
               </div>
             </div>
           </CardContent>
@@ -193,12 +208,14 @@ export default function AdminDashboard() {
                 <span className="text-sm">Available</span>
                 <span className="font-bold text-blue-600">{totalCredits - usedCredits}</span>
               </div>
-              <div className="mt-2 h-2 rounded-full bg-gray-200">
-                <div
-                  className="h-2 rounded-full bg-green-600"
-                  style={{ width: `${(usedCredits / totalCredits) * 100}%` }}
-                />
-              </div>
+              {totalCredits > 0 && (
+                <div className="mt-2 h-2 rounded-full bg-gray-200">
+                  <div
+                    className="h-2 rounded-full bg-green-600"
+                    style={{ width: `${(usedCredits / totalCredits) * 100}%` }}
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -229,6 +246,36 @@ export default function AdminDashboard() {
                   <span>{pendingSponsors.length} sponsors awaiting payment</span>
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Links</CardTitle>
+            <CardDescription>Common actions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Link
+                href="/sponsor"
+                className="block p-2 rounded hover:bg-gray-100 text-sm text-blue-600"
+              >
+                View sponsor signup page
+              </Link>
+              <Link
+                href="/admin/sponsors"
+                className="block p-2 rounded hover:bg-gray-100 text-sm text-blue-600"
+              >
+                Manage sponsors
+              </Link>
+              <Link
+                href="/admin/teams"
+                className="block p-2 rounded hover:bg-gray-100 text-sm text-blue-600"
+              >
+                View registered teams
+              </Link>
             </div>
           </CardContent>
         </Card>

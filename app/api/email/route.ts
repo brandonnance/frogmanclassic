@@ -4,7 +4,7 @@ import { sponsorWelcomeEmail, captainCodeEmail, teamConfirmationEmail } from '@/
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const FROM_EMAIL = 'Frogman Classic <noreply@frogmanclassic.com>'
+const FROM_EMAIL = 'Frogman Classic <noreply@frogman.brandon-nance.com>'
 
 export async function POST(request: NextRequest) {
   try {

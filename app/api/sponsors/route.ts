@@ -4,6 +4,76 @@ import { generateMultipleCodes } from '@/lib/codes'
 import { getPackageById } from '@/lib/sponsorship-packages'
 import type { PaymentMethod, PaymentStatus } from '@/lib/types'
 
+export async function GET() {
+  try {
+    const supabase = createServerClient()
+
+    // Get active event year
+    const { data: eventYear } = await supabase
+      .from('event_years')
+      .select('id')
+      .eq('is_active', true)
+      .single()
+
+    if (!eventYear) {
+      return NextResponse.json({ sponsors: [], credits: [] })
+    }
+
+    // Fetch sponsors for active year with credits
+    const { data: sponsors, error: sponsorsError } = await supabase
+      .from('sponsors')
+      .select('*')
+      .eq('event_year_id', eventYear.id)
+      .order('created_at', { ascending: false })
+
+    if (sponsorsError) {
+      console.error('Error fetching sponsors:', sponsorsError)
+      return NextResponse.json(
+        { error: 'Failed to fetch sponsors' },
+        { status: 500 }
+      )
+    }
+
+    // Fetch all credits for these sponsors
+    const sponsorIds = sponsors?.map(s => s.id) || []
+    let credits: { id: string; sponsor_id: string; redemption_code: string; redeemed_by_team_id: string | null; redeemed_at: string | null; captain_email: string | null; email_sent_at: string | null; created_at: string }[] = []
+
+    if (sponsorIds.length > 0) {
+      const { data: creditsData, error: creditsError } = await supabase
+        .from('sponsor_credits')
+        .select('*')
+        .in('sponsor_id', sponsorIds)
+
+      if (creditsError) {
+        console.error('Error fetching credits:', creditsError)
+      } else {
+        credits = creditsData || []
+      }
+    }
+
+    // Calculate credits_used for each sponsor
+    const sponsorsWithCredits = sponsors?.map(sponsor => {
+      const sponsorCredits = credits.filter(c => c.sponsor_id === sponsor.id)
+      const creditsUsed = sponsorCredits.filter(c => c.redeemed_by_team_id !== null).length
+      return {
+        ...sponsor,
+        credits_used: creditsUsed
+      }
+    }) || []
+
+    return NextResponse.json({
+      sponsors: sponsorsWithCredits,
+      credits
+    })
+  } catch (error) {
+    console.error('Error fetching sponsors:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()

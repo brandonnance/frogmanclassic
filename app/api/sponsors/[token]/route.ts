@@ -76,3 +76,108 @@ export async function GET(
     )
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await params
+    const body = await request.json()
+    const supabase = createServerClient()
+
+    // Find sponsor by token
+    const { data: sponsor, error: findError } = await supabase
+      .from('sponsors')
+      .select('id')
+      .eq('access_token', token)
+      .single()
+
+    if (findError || !sponsor) {
+      return NextResponse.json(
+        { error: 'Sponsor not found' },
+        { status: 404 }
+      )
+    }
+
+    // Update sponsor
+    const { error: updateError } = await supabase
+      .from('sponsors')
+      .update({
+        name: body.name,
+        contact_name: body.contact_name,
+        contact_email: body.contact_email,
+        payment_method: body.payment_method,
+        payment_status: body.payment_status,
+      })
+      .eq('id', sponsor.id)
+
+    if (updateError) {
+      console.error('Error updating sponsor:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update sponsor' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Sponsor update error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await params
+    const supabase = createServerClient()
+
+    // Find sponsor by token
+    const { data: sponsor, error: findError } = await supabase
+      .from('sponsors')
+      .select('id')
+      .eq('access_token', token)
+      .single()
+
+    if (findError || !sponsor) {
+      return NextResponse.json(
+        { error: 'Sponsor not found' },
+        { status: 404 }
+      )
+    }
+
+    // Delete credits first (due to foreign key)
+    await supabase
+      .from('sponsor_credits')
+      .delete()
+      .eq('sponsor_id', sponsor.id)
+
+    // Delete sponsor
+    const { error: deleteError } = await supabase
+      .from('sponsors')
+      .delete()
+      .eq('id', sponsor.id)
+
+    if (deleteError) {
+      console.error('Error deleting sponsor:', deleteError)
+      return NextResponse.json(
+        { error: 'Failed to delete sponsor' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Sponsor delete error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

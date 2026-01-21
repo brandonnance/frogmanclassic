@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useStore } from '@/lib/mock-data'
-import { getTeamDisplayName, formatHandicap, getPlayerName } from '@/lib/calculations'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -14,170 +12,135 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Plus, Search, Edit2, Trash2, UserMinus, Users } from 'lucide-react'
-import type { EventType, SessionPref, Team, TeamWithPlayers } from '@/lib/types'
+import { RefreshCw, Search, Users } from 'lucide-react'
+import type { EventType } from '@/lib/types'
+
+interface Team {
+  id: string
+  event_year_id: string
+  event_type: EventType
+  team_name: string | null
+  sponsor_id: string | null
+  credit_id: string | null
+  session_pref: string
+  notes: string | null
+  withdrawn_at: string | null
+  created_at: string
+  sponsor?: { id: string; name: string } | null
+  credit?: { id: string; redemption_code: string } | null
+}
+
+interface Player {
+  id: string
+  first_name: string
+  last_name: string
+  handicap_raw: number | null
+  plays_yellow_tees: boolean
+}
+
+interface TeamPlayer {
+  team_id: string
+  player_id: string
+  role: string
+}
+
+interface TeamWithPlayers extends Team {
+  players: (Player & { role: string })[]
+}
 
 export default function TeamsPage() {
-  const {
-    sponsors,
-    sponsorCredits,
-    players,
-    getTeamsWithPlayers,
-    addTeam,
-    updateTeam,
-    withdrawTeam,
-    deleteTeam,
-    setTeamPlayers,
-    activeEventYearId,
-  } = useStore()
+  const [teams, setTeams] = useState<Team[]>([])
+  const [players, setPlayers] = useState<Player[]>([])
+  const [teamPlayers, setTeamPlayers] = useState<TeamPlayer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [search, setSearch] = useState('')
   const [eventType, setEventType] = useState<EventType>('friday')
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingTeam, setEditingTeam] = useState<TeamWithPlayers | null>(null)
-  const [selectedPlayers, setSelectedPlayers] = useState<string[]>([])
-  const [formData, setFormData] = useState({
-    team_name: '',
-    sponsor_id: '',
-    session_pref: 'none' as SessionPref,
-    notes: '',
-  })
 
-  const teamsWithPlayers = getTeamsWithPlayers()
+  const fetchTeams = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch('/api/teams')
+      if (!response.ok) {
+        throw new Error('Failed to fetch teams')
+      }
+      const data = await response.json()
+      setTeams(data.teams || [])
+      setPlayers(data.players || [])
+      setTeamPlayers(data.teamPlayers || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load teams')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchTeams()
+  }, [fetchTeams])
+
+  // Build teams with players
+  const teamsWithPlayers = useMemo((): TeamWithPlayers[] => {
+    return teams.map(team => {
+      const tps = teamPlayers.filter(tp => tp.team_id === team.id)
+      const teamPlayerList = tps.map(tp => {
+        const player = players.find(p => p.id === tp.player_id)
+        return player ? { ...player, role: tp.role } : null
+      }).filter((p): p is Player & { role: string } => p !== null)
+
+      return {
+        ...team,
+        players: teamPlayerList
+      }
+    })
+  }, [teams, players, teamPlayers])
 
   // Filter teams by event type and search
   const filteredTeams = useMemo(() => {
-    let teams = teamsWithPlayers.filter(t => t.event_type === eventType)
+    let result = teamsWithPlayers.filter(t => t.event_type === eventType)
     if (search) {
       const searchLower = search.toLowerCase()
-      teams = teams.filter(t => {
-        const displayName = getTeamDisplayName(t).toLowerCase()
-        const playerNames = t.players.map(p => getPlayerName(p).toLowerCase()).join(' ')
-        return displayName.includes(searchLower) || playerNames.includes(searchLower)
+      result = result.filter(t => {
+        const displayName = t.sponsor?.name || t.team_name || 'Team'
+        const playerNames = t.players.map(p => `${p.first_name} ${p.last_name}`.toLowerCase()).join(' ')
+        return displayName.toLowerCase().includes(searchLower) || playerNames.includes(searchLower)
       })
     }
-    return teams
+    return result
   }, [teamsWithPlayers, eventType, search])
 
   // Separate active and withdrawn teams
   const activeTeams = filteredTeams.filter(t => !t.withdrawn_at)
   const withdrawnTeams = filteredTeams.filter(t => t.withdrawn_at)
 
-  // Get available credits for sponsor selection
-  const sponsorsWithAvailableCredits = sponsors.filter(s => {
-    const available = sponsorCredits.filter(
-      c => c.sponsor_id === s.id && c.redeemed_by_team_id === null
+  const getTeamDisplayName = (team: TeamWithPlayers) => {
+    if (team.sponsor?.name) return team.sponsor.name
+    if (team.team_name) return team.team_name
+    if (team.players.length > 0) {
+      return `Team ${team.players[0].last_name}`
+    }
+    return 'Unnamed Team'
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
     )
-    return available.length > 0 || (editingTeam && editingTeam.sponsor_id === s.id)
-  })
+  }
 
-  // Get players not on any active team for current event type
-  const availablePlayers = useMemo(() => {
-    const assignedPlayerIds = new Set(
-      teamsWithPlayers
-        .filter(t => t.event_type === eventType && !t.withdrawn_at && t.id !== editingTeam?.id)
-        .flatMap(t => t.players.map(p => p.id))
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <p className="text-red-600">{error}</p>
+        <Button onClick={fetchTeams}>Try Again</Button>
+      </div>
     )
-    return players.filter(p => !assignedPlayerIds.has(p.id))
-  }, [players, teamsWithPlayers, eventType, editingTeam])
-
-  const handleAddTeam = () => {
-    setEditingTeam(null)
-    setSelectedPlayers([])
-    setFormData({
-      team_name: '',
-      sponsor_id: '',
-      session_pref: 'none',
-      notes: '',
-    })
-    setDialogOpen(true)
   }
-
-  const handleEditTeam = (team: TeamWithPlayers) => {
-    setEditingTeam(team)
-    setSelectedPlayers(team.players.map(p => p.id))
-    setFormData({
-      team_name: team.team_name || '',
-      sponsor_id: team.sponsor_id || '',
-      session_pref: team.session_pref,
-      notes: team.notes,
-    })
-    setDialogOpen(true)
-  }
-
-  const handleSaveTeam = () => {
-    const teamData = {
-      event_year_id: activeEventYearId || 'ey_2025',
-      event_type: eventType,
-      team_name: formData.team_name || null,
-      sponsor_id: formData.sponsor_id || null,
-      credit_id: null as string | null,
-      session_pref: formData.session_pref,
-      notes: formData.notes,
-      withdrawn_at: null,
-    }
-
-    // If sponsor selected, find an available credit
-    if (formData.sponsor_id) {
-      const availableCredit = sponsorCredits.find(
-        c => c.sponsor_id === formData.sponsor_id && c.redeemed_by_team_id === null
-      )
-      if (availableCredit) {
-        teamData.credit_id = availableCredit.id
-      }
-    }
-
-    if (editingTeam) {
-      updateTeam(editingTeam.id, teamData)
-      setTeamPlayers(editingTeam.id, selectedPlayers)
-    } else {
-      addTeam(teamData, selectedPlayers)
-    }
-
-    setDialogOpen(false)
-  }
-
-  const handleWithdrawTeam = (team: TeamWithPlayers) => {
-    if (confirm(`Withdraw team "${getTeamDisplayName(team)}"? This will restore any sponsor credits.`)) {
-      withdrawTeam(team.id)
-    }
-  }
-
-  const handleDeleteTeam = (team: TeamWithPlayers) => {
-    if (confirm(`Permanently delete team "${getTeamDisplayName(team)}"?`)) {
-      deleteTeam(team.id)
-    }
-  }
-
-  const togglePlayer = (playerId: string) => {
-    const maxPlayers = eventType === 'friday' ? 5 : 2
-    if (selectedPlayers.includes(playerId)) {
-      setSelectedPlayers(selectedPlayers.filter(id => id !== playerId))
-    } else if (selectedPlayers.length < maxPlayers) {
-      setSelectedPlayers([...selectedPlayers, playerId])
-    }
-  }
-
-  const maxPlayers = eventType === 'friday' ? 5 : 2
-  const minPlayers = eventType === 'friday' ? 4 : 2
 
   return (
     <div className="space-y-6">
@@ -189,9 +152,8 @@ export default function TeamsPage() {
             {activeTeams.length} active teams
           </p>
         </div>
-        <Button onClick={handleAddTeam}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Team
+        <Button variant="outline" size="icon" onClick={fetchTeams}>
+          <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
 
@@ -218,7 +180,7 @@ export default function TeamsPage() {
             />
           </div>
 
-          {/* Active Teams Table */}
+          {/* Teams Table */}
           <div className="border rounded-lg bg-white">
             <Table>
               <TableHeader>
@@ -226,17 +188,19 @@ export default function TeamsPage() {
                   <TableHead>Team</TableHead>
                   <TableHead>Players</TableHead>
                   <TableHead>Sponsor</TableHead>
-                  <TableHead className="text-center">Combined Handicap</TableHead>
-                  {eventType === 'sat_sun' && <TableHead className="text-center">Flight</TableHead>}
                   <TableHead>Session</TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {activeTeams.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={eventType === 'sat_sun' ? 7 : 6} className="text-center text-gray-500 py-8">
-                      No teams registered
+                    <TableCell colSpan={5} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-2 text-gray-500">
+                        <Users className="h-10 w-10 text-gray-300" />
+                        <p>No teams registered yet</p>
+                        <p className="text-sm">Teams will appear here when sponsors redeem their credits</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -250,17 +214,23 @@ export default function TeamsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          {team.players.map((player) => (
-                            <div key={player.id} className="flex items-center gap-2 text-sm">
-                              <span>{getPlayerName(player)}</span>
-                              {player.role === 'seal_guest' && (
-                                <Badge variant="secondary" className="text-xs">Guest</Badge>
-                              )}
-                              <span className="text-gray-400">
-                                ({formatHandicap(player.handicap_playing)})
-                              </span>
-                            </div>
-                          ))}
+                          {team.players.length === 0 ? (
+                            <span className="text-gray-400 text-sm">No players assigned</span>
+                          ) : (
+                            team.players.map((player) => (
+                              <div key={player.id} className="flex items-center gap-2 text-sm">
+                                <span>{player.first_name} {player.last_name}</span>
+                                {player.role === 'seal_guest' && (
+                                  <Badge variant="secondary" className="text-xs">Guest</Badge>
+                                )}
+                                {player.handicap_raw !== null && (
+                                  <span className="text-gray-400">
+                                    ({player.handicap_raw})
+                                  </span>
+                                )}
+                              </div>
+                            ))
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -270,54 +240,13 @@ export default function TeamsPage() {
                           <span className="text-gray-400">Direct Pay</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-center font-medium">
-                        {team.combined_handicap !== null ? team.combined_handicap : '-'}
-                      </TableCell>
-                      {eventType === 'sat_sun' && (
-                        <TableCell className="text-center">
-                          {team.flight ? (
-                            <Badge variant={team.flight === 1 ? 'default' : 'secondary'}>
-                              Flight {team.flight}
-                            </Badge>
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                      )}
                       <TableCell>
                         <Badge variant="outline" className="capitalize">
                           {team.session_pref === 'none' ? 'Any' : team.session_pref.toUpperCase()}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => handleEditTeam(team)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-amber-600 hover:text-amber-700"
-                            onClick={() => handleWithdrawTeam(team)}
-                            title="Withdraw team"
-                          >
-                            <UserMinus className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-red-600 hover:text-red-700"
-                            onClick={() => handleDeleteTeam(team)}
-                            title="Delete team"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Badge variant="success">Active</Badge>
                       </TableCell>
                     </TableRow>
                   ))
@@ -337,21 +266,10 @@ export default function TeamsPage() {
                       <TableRow key={team.id} className="opacity-60">
                         <TableCell className="font-medium">{getTeamDisplayName(team)}</TableCell>
                         <TableCell>
-                          {team.players.map(p => getPlayerName(p)).join(', ')}
+                          {team.players.map(p => `${p.first_name} ${p.last_name}`).join(', ') || 'No players'}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">Withdrawn</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600"
-                            onClick={() => handleDeleteTeam(team)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -362,168 +280,6 @@ export default function TeamsPage() {
           )}
         </TabsContent>
       </Tabs>
-
-      {/* Add/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingTeam ? 'Edit Team' : `Add ${eventType === 'friday' ? 'Friday' : 'Sat/Sun'} Team`}
-            </DialogTitle>
-            <DialogDescription>
-              {eventType === 'friday'
-                ? 'Friday teams have 4-5 players'
-                : 'Sat/Sun teams have 2 players'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="team_name">Team Name (optional)</Label>
-                <Input
-                  id="team_name"
-                  value={formData.team_name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, team_name: e.target.value })
-                  }
-                  placeholder="Auto-generated if blank"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Session Preference</Label>
-                <Select
-                  value={formData.session_pref}
-                  onValueChange={(value: SessionPref) =>
-                    setFormData({ ...formData, session_pref: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Preference</SelectItem>
-                    <SelectItem value="am">AM Session</SelectItem>
-                    <SelectItem value="pm">PM Session</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Sponsor (optional - uses credit)</Label>
-              <Select
-                value={formData.sponsor_id}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, sponsor_id: value === 'none' ? '' : value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Direct Pay (no sponsor)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Direct Pay (no sponsor)</SelectItem>
-                  {sponsorsWithAvailableCredits.map((sponsor) => (
-                    <SelectItem key={sponsor.id} value={sponsor.id}>
-                      {sponsor.name} ({sponsor.total_credits - sponsor.credits_used} credits available)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Input
-                value={formData.notes}
-                onChange={(e) =>
-                  setFormData({ ...formData, notes: e.target.value })
-                }
-                placeholder="Optional notes about this team"
-              />
-            </div>
-
-            {/* Player Selection */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Players ({selectedPlayers.length}/{maxPlayers})</Label>
-                {selectedPlayers.length < minPlayers && (
-                  <span className="text-sm text-amber-600">
-                    Need at least {minPlayers} players
-                  </span>
-                )}
-              </div>
-
-              <div className="border rounded-lg max-h-64 overflow-y-auto">
-                {/* Selected players first */}
-                {selectedPlayers.length > 0 && (
-                  <div className="border-b p-2 bg-green-50">
-                    <div className="text-xs font-medium text-green-700 mb-2">Selected Players</div>
-                    {selectedPlayers.map((playerId) => {
-                      const player = players.find(p => p.id === playerId)
-                      if (!player) return null
-                      return (
-                        <div
-                          key={playerId}
-                          className="flex items-center justify-between py-1 px-2 hover:bg-green-100 rounded cursor-pointer"
-                          onClick={() => togglePlayer(playerId)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Checkbox checked={true} />
-                            <span className="font-medium">{getPlayerName(player)}</span>
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            {player.handicap_raw !== null ? `Hcp: ${player.handicap_raw}` : 'No handicap'}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Available players */}
-                <div className="p-2">
-                  <div className="text-xs font-medium text-gray-500 mb-2">Available Players</div>
-                  {availablePlayers
-                    .filter(p => !selectedPlayers.includes(p.id))
-                    .sort((a, b) => a.last_name.localeCompare(b.last_name))
-                    .map((player) => (
-                      <div
-                        key={player.id}
-                        className="flex items-center justify-between py-1 px-2 hover:bg-gray-100 rounded cursor-pointer"
-                        onClick={() => togglePlayer(player.id)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            checked={false}
-                            disabled={selectedPlayers.length >= maxPlayers}
-                          />
-                          <span>{getPlayerName(player)}</span>
-                        </div>
-                        <span className="text-sm text-gray-500">
-                          {player.handicap_raw !== null ? `Hcp: ${player.handicap_raw}` : 'No handicap'}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveTeam}
-              disabled={selectedPlayers.length < minPlayers}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              {editingTeam ? 'Save Team' : 'Create Team'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

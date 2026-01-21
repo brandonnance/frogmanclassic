@@ -19,14 +19,14 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'event_1500',
     name: 'Event Sponsor',
     price: 1500,
-    includedEntries: 1,
+    includedEntries: 2,
     benefits: ['Banner on a hole', 'Entry for a team into BOTH Frogman events'],
   },
   {
     id: 'hole_2500',
     name: 'Hole Sponsor (w/ Dinner Table)',
     price: 2500,
-    includedEntries: 1,
+    includedEntries: 2,
     dinnerTable: true,
     benefits: [
       'Banner on a hole',
@@ -38,7 +38,7 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'golf_cart',
     name: 'Golf Cart Sponsor',
     price: 5000,
-    includedEntries: 1,
+    includedEntries: 2,
     sealPlay: true,
     dinnerTable: true,
     benefits: [
@@ -52,7 +52,7 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'driving_range',
     name: 'Driving Range Sponsor',
     price: 5000,
-    includedEntries: 1,
+    includedEntries: 2,
     sealPlay: true,
     dinnerTable: true,
     benefits: [
@@ -66,7 +66,7 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'tee_block',
     name: 'Tee Block Sponsor',
     price: 7500,
-    includedEntries: 1,
+    includedEntries: 2,
     sealPlay: true,
     dinnerTable: true,
     benefits: [
@@ -80,7 +80,7 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'flag',
     name: 'Flag Sponsor',
     price: 7500,
-    includedEntries: 1,
+    includedEntries: 2,
     sealPlay: true,
     dinnerTable: true,
     benefits: [
@@ -94,7 +94,7 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'seal',
     name: 'SEAL Sponsor',
     price: 7500,
-    includedEntries: 1,
+    includedEntries: 2,
     sealPlay: 'both',
     dinnerTable: true,
     benefits: [
@@ -108,7 +108,7 @@ export const sponsorshipPackages: SponsorshipPackage[] = [
     id: 'tee_prize',
     name: 'Tee Prize Sponsor',
     price: 10000,
-    includedEntries: 1,
+    includedEntries: 2,
     dinnerTable: true,
     benefits: [
       'Logo on tee prize swag bags',
