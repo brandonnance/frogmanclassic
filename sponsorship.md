@@ -1,261 +1,164 @@
 # Frogman Classic - Sponsorship & Supabase Integration Plan
 
-## Priority Context
-Tournament director needs sponsorship link live by end of January. Focus on:
-1. Supabase database setup
-2. Public sponsor signup flow
-3. Redemption codes with email delivery (Resend)
-4. Sponsor portal for code management
+## Current Status: LIVE
+- **Live URL**: https://frogman.brandon-nance.com
+- **Sponsor Signup**: https://frogman.brandon-nance.com/sponsor
+- **Admin Panel**: https://frogman.brandon-nance.com/admin
+
+---
+
+## Completed Features
+
+### Phase 1: Supabase Setup ✅
+- Database schema deployed via migrations
+- Tables: event_years, sponsors, sponsor_credits, players, teams, team_players, tee_sheet_slots
+- Added `package_id` column to sponsors table for tracking sponsorship tier
+
+### Phase 2: Redemption Code System ✅
+- Code format: `FROG-2025-XXXX` (4 random alphanumeric chars)
+- Codes generated when sponsor is created (one per credit)
+- States: Available (not redeemed) / Redeemed (linked to team)
+- Codes restore when team is withdrawn/deleted
+
+### Phase 3: Public Routes ✅
+- `/sponsor` - Sponsor signup with package selection
+- `/sponsor/[token]` - Sponsor portal (view codes, resend emails, manage credits)
+- `/sponsor/edit` - Edit sponsor details via access token
+- `/redeem/[code]` - Team registration with code redemption
+
+### Phase 4: Email Integration ✅
+- Resend configured with domain: `frogman.brandon-nance.com`
+- FROM address: `Frogman Classic <noreply@frogman.brandon-nance.com>`
+- Email types:
+  - `sponsor_welcome` - All codes + portal link
+  - `captain_code` - Single code to team captain
+  - `team_confirmation` - Registration confirmed
+
+### Phase 5: Admin Dashboard ✅
+- `/admin` - Dashboard with stats (sponsors, teams, players, credits)
+- `/admin/sponsors` - Manage sponsors, view credits, payment status
+- `/admin/teams` - View registered teams
+- `/admin/players` - View all players
+- `/admin/tee-sheets` - Placeholder (coming soon)
+
+### Credit System ✅
+- Credits = team entries into events
+- "ONE Frogman event" = 1 credit
+- "BOTH Frogman events" = 2 credits
+- Tournament sponsor = 5 credits
+
+---
+
+## Deployment Info
+
+### Vercel
+- Auto-deploys from GitHub main branch
+- Environment variables configured
+
+### Cloudflare DNS
+- CNAME: frogman.brandon-nance.com → cname.vercel-dns.com
+
+### GitHub
+- Repo: https://github.com/brandonnance/frogmanclassic
 
 ---
 
 ## Supabase Project Info
 - **URL**: https://zwdgwbhpntjolbpdzybi.supabase.co
-- **Publishable Key**: sb_publishable_e76dfeC4SZdAXUVnXzGNGw_7pJl9dwV
-- **Service Key**: sb_secret_a7yEnHhOfcZu5naov_75Gg_zmrrarte
+- **Project ID**: zwdgwbhpntjolbpdzybi
+- **Keys**: Stored in .env.local and Vercel (rotated Jan 2025)
 
 ---
 
-## Phase 1: Supabase Setup
+## Sponsorship Packages
 
-### 1.1 Database Schema
-Run in Supabase SQL editor:
-
-```sql
--- Event Years
-create table event_years (
-  id uuid primary key default gen_random_uuid(),
-  year int not null,
-  start_date date,
-  end_date date,
-  is_active boolean default false,
-  created_at timestamptz default now()
-);
-
--- Sponsors
-create table sponsors (
-  id uuid primary key default gen_random_uuid(),
-  event_year_id uuid references event_years(id),
-  name text not null,
-  contact_name text not null,
-  contact_email text not null,
-  payment_method text check (payment_method in ('stripe', 'check', 'invoice')),
-  payment_status text default 'pending' check (payment_status in ('pending', 'paid')),
-  total_credits int not null default 2,
-  access_token text unique default gen_random_uuid()::text,
-  created_at timestamptz default now()
-);
-
--- Sponsor Credits (individual redemption codes)
-create table sponsor_credits (
-  id uuid primary key default gen_random_uuid(),
-  sponsor_id uuid references sponsors(id) on delete cascade,
-  redemption_code text unique not null,
-  redeemed_by_team_id uuid,
-  redeemed_at timestamptz,
-  captain_email text,
-  email_sent_at timestamptz,
-  created_at timestamptz default now()
-);
-
--- Players
-create table players (
-  id uuid primary key default gen_random_uuid(),
-  first_name text not null,
-  last_name text not null,
-  email text,
-  phone text,
-  ghin text default 'NONE',
-  handicap_raw int,
-  plays_yellow_tees boolean default false,
-  last_handicap_update_at timestamptz,
-  created_at timestamptz default now()
-);
-
--- Teams
-create table teams (
-  id uuid primary key default gen_random_uuid(),
-  event_year_id uuid references event_years(id),
-  event_type text check (event_type in ('friday', 'sat_sun')),
-  team_name text,
-  sponsor_id uuid references sponsors(id),
-  credit_id uuid references sponsor_credits(id),
-  session_pref text default 'none' check (session_pref in ('am', 'pm', 'none')),
-  notes text,
-  withdrawn_at timestamptz,
-  created_at timestamptz default now()
-);
-
--- Team Players (join table)
-create table team_players (
-  team_id uuid references teams(id) on delete cascade,
-  player_id uuid references players(id) on delete cascade,
-  role text default 'player' check (role in ('player', 'seal_guest')),
-  primary key (team_id, player_id)
-);
-
--- Tee Sheet Slots
-create table tee_sheet_slots (
-  id uuid primary key default gen_random_uuid(),
-  event_year_id uuid references event_years(id),
-  event_day text check (event_day in ('friday', 'saturday', 'sunday')),
-  session text check (session in ('am', 'pm')),
-  hole_number int not null,
-  team_ids uuid[] default '{}'
-);
-```
-
-### 1.2 Environment Variables
-Add to `.env.local`:
-```
-NEXT_PUBLIC_SUPABASE_URL=https://zwdgwbhpntjolbpdzybi.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_e76dfeC4SZdAXUVnXzGNGw_7pJl9dwV
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_a7yEnHhOfcZu5naov_75Gg_zmrrarte
-RESEND_API_KEY=xxx
-```
+| ID | Name | Price | Credits | Extras |
+|----|------|-------|---------|--------|
+| banner | Banner Sponsor | $500 | 0 | - |
+| hole_1000 | Hole Sponsor | $1,000 | 1 | ONE event |
+| event_1500 | Event Sponsor | $1,500 | 2 | BOTH events |
+| hole_2500 | Hole Sponsor (w/ Dinner) | $2,500 | 2 | + dinner table |
+| golf_cart | Golf Cart Sponsor | $5,000 | 2 | + SEAL play, dinner |
+| driving_range | Driving Range Sponsor | $5,000 | 2 | + SEAL play, dinner |
+| tee_block | Tee Block Sponsor | $7,500 | 2 | + SEAL play, dinner |
+| flag | Flag Sponsor | $7,500 | 2 | + SEAL play, dinner |
+| seal | SEAL Sponsor | $7,500 | 2 | + SEAL play (both events), dinner |
+| tee_prize | Tee Prize Sponsor | $10,000 | 2 | + dinner |
+| tournament | Tournament Sponsor | $20,000 | 5 | Event named after company |
 
 ---
 
-## Phase 2: Redemption Code System
+## Remaining Work
 
-### 2.1 Code Generation
-Format: `FROG-2025-XXXX` (4 random alphanumeric chars)
-- Generated when sponsor is created
-- One code per credit
-- Stored in `sponsor_credits.redemption_code`
+### Priority: Before Tournament
+- [ ] Tee sheet management (assign teams to tee times)
+- [ ] GHIN handicap sync for players
 
-### 2.2 Code States
-- **Available**: `redeemed_by_team_id` is null
-- **Redeemed**: `redeemed_by_team_id` is set
-- **Restored**: When team withdrawn, set `redeemed_by_team_id` back to null
+### Future (After Non-Profit Setup)
+- [ ] Stripe payment integration
+- [ ] Online payment via sponsor portal
 
----
-
-## Phase 3: Public Routes
-
-### 3.1 Sponsor Signup (`/sponsor`)
-**File**: `app/sponsor/page.tsx`
-
-Form fields:
-- Company/Sponsor Name
-- Contact Name
-- Contact Email
-- Number of Credits (2, 4, 6, 8)
-- Captain Emails (optional, one per credit)
-
-Flow:
-1. Submit form -> Create sponsor + credits in Supabase
-2. Generate unique redemption codes
-3. Send email via Resend with codes
-4. Show confirmation with sponsor portal link
-
-### 3.2 Sponsor Portal (`/sponsor/[token]`)
-**File**: `app/sponsor/[token]/page.tsx`
-
-Features:
-- View all credits with codes and status
-- Copy code to clipboard
-- Resend code email to specific captain
-- Update captain email for a code
-- See which codes are redeemed and by whom
-- Future: Pay via Stripe (when available)
-
-### 3.3 Code Redemption (`/redeem/[code]`)
-**File**: `app/redeem/[code]/page.tsx`
-
-Flow:
-1. Validate code exists and is available
-2. Show team registration form
-3. Collect: Team name, event type, session preference, player info
-4. Create team + link to credit
-5. Send confirmation email
+### Nice to Have
+- [ ] Export functionality (CSV/Excel)
+- [ ] Bulk email to all sponsors/captains
+- [ ] Player statistics dashboard
 
 ---
 
-## Phase 4: Email Integration (Resend)
+## API Routes
 
-### 4.1 Install Resend
-```bash
-npm install resend
-```
-
-### 4.2 API Routes
-**File**: `app/api/email/route.ts`
-
-Email templates:
-1. **Sponsor Welcome**: All codes + portal link
-2. **Code Email**: Single code to captain
-3. **Team Confirmation**: Registration confirmed
-
-### 4.3 Email Content
-Sponsor welcome email includes:
-- Sponsor name, thank you message
-- List of all redemption codes
-- Link to sponsor portal
-- Instructions for sharing codes
+| Route | Methods | Purpose |
+|-------|---------|---------|
+| `/api/sponsors` | GET, POST | List/create sponsors |
+| `/api/sponsors/[token]` | GET, PATCH, DELETE | Sponsor by access token |
+| `/api/sponsors/[token]/credits/[creditId]` | PATCH | Update credit (resend email) |
+| `/api/sponsors/edit` | GET, PATCH | Edit sponsor via token |
+| `/api/sponsors/edit/credits/[creditId]` | PATCH | Edit credit email |
+| `/api/teams` | GET | List all teams with players |
+| `/api/players` | GET | List all players |
+| `/api/redeem/[code]` | POST | Redeem code (create team) |
+| `/api/redeem/[code]/validate` | GET | Validate redemption code |
+| `/api/email` | POST | Send emails via Resend |
 
 ---
 
-## Phase 5: Migration Strategy
-
-### 5.1 Dual Mode
-Keep mock data working while Supabase is being set up:
-- Add `USE_SUPABASE` env flag
-- Create `lib/db.ts` that switches between mock and Supabase
-- Gradually migrate screens to use Supabase
-
-### 5.2 Data Seeding
-Create script to seed Supabase with:
-- 2025 event year
-- Existing players from mock data
-
----
-
-## Files to Create/Modify
-
-### New Files
-1. `lib/supabase.ts` - Supabase client setup
-2. `lib/db.ts` - Database abstraction layer
-3. `lib/codes.ts` - Redemption code generation
-4. `app/sponsor/page.tsx` - Public sponsor signup
-5. `app/sponsor/[token]/page.tsx` - Sponsor portal
-6. `app/redeem/[code]/page.tsx` - Code redemption/team signup
-7. `app/api/email/route.ts` - Email sending via Resend
-8. `lib/email-templates.ts` - Email HTML templates
-
-### Modified Files
-1. `lib/types.ts` - Add access_token to Sponsor, redemption_code to SponsorCredit
-2. `app/admin/sponsors/page.tsx` - Show codes, resend options
-3. `lib/mock-data.tsx` - Generate redemption codes
-
----
-
-## Implementation Order
-
-1. **Supabase project setup** - Run schema SQL in Supabase dashboard
-2. **Install dependencies**: `npm install @supabase/supabase-js resend`
-3. **Create lib/supabase.ts** - client setup
-4. **Update lib/types.ts** - add new fields
-5. **Create lib/codes.ts** - code generation
-6. **Create app/sponsor/page.tsx** - signup form
-7. **Create app/api/email/route.ts** - Resend integration
-8. **Create app/sponsor/[token]/page.tsx** - portal
-9. **Create app/redeem/[code]/page.tsx** - team registration
-10. **Update admin sponsors page** - show codes
+## Security Notes
+- Service role key rotated Jan 2025 (was exposed in .claude/settings.local.json)
+- `.claude/` directory now in .gitignore
+- All sensitive keys stored in .env.local (gitignored)
 
 ---
 
 ## MCP Servers Configured
-- **Supabase**: Connected (PAT-based auth)
+- **Supabase**: Connected via PAT
 - **Filesystem**: Connected
 - **Context7**: Connected
 
 ---
 
-## Key User Requirements
-1. Redemption codes for each sponsor credit (can be emailed to anyone)
-2. Codes become invalid once redeemed
-3. Codes restore to valid if team is withdrawn/deleted
-4. Sponsor portal to view codes and resend emails
-5. No Stripe yet (non-profit not set up), but allow future payment via confirmation link
-6. Real email via Resend
+## Key Files
+
+```
+lib/
+  supabase.ts         # Supabase client setup
+  types.ts            # TypeScript interfaces
+  codes.ts            # Redemption code generation
+  email-templates.ts  # HTML email templates
+  sponsorship-packages.ts  # Package definitions
+  calculations.ts     # Utility calculations
+  test-data.tsx       # Mock data for testing
+
+app/
+  sponsor/
+    page.tsx          # Sponsor signup
+    [token]/page.tsx  # Sponsor portal
+    edit/page.tsx     # Edit sponsor
+  redeem/
+    [code]/page.tsx   # Team registration
+  admin/
+    page.tsx          # Dashboard
+    sponsors/page.tsx # Manage sponsors
+    teams/page.tsx    # View teams
+    players/page.tsx  # View players
+    tee-sheets/page.tsx # Placeholder
+```
