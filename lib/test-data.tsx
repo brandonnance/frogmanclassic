@@ -277,11 +277,13 @@ function generateMockData(): StoreState {
       id: `player_${i + 1}`,
       first_name: firstName,
       last_name: lastName,
+      suffix: null,
       email: Math.random() > 0.2 ? `${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/[^a-z]/g, '')}@email.com` : null,
       phone: Math.random() > 0.3 ? `(509) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}` : null,
       ghin: data.ghin || 'NONE',
       handicap_raw: data.hi,
       plays_yellow_tees: data.yellowTees,
+      home_course: null,
       last_handicap_update_at: lastUpdate,
     }
   })

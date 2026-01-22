@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Plus, Search, Edit2, Trash2, Download, RefreshCw, ExternalLink } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Download, RefreshCw, ExternalLink, Minus, AlertCircle } from 'lucide-react'
 import { getPackageById, formatPrice } from '@/lib/sponsorship-packages'
 import type { PaymentMethod, PaymentStatus } from '@/lib/types'
 
@@ -146,6 +146,25 @@ export default function SponsorsPage() {
     setDialogOpen(true)
   }
 
+  // Get used credits for current editing sponsor
+  const getUsedCreditsCount = () => {
+    if (!editingSponsor) return 0
+    return editingSponsor.credits_used
+  }
+
+  // Handle credit adjustment
+  const handleAdjustCredits = (delta: number) => {
+    const newTotal = formData.total_credits + delta
+    const usedCount = getUsedCreditsCount()
+
+    // Cannot go below used credits
+    if (newTotal < usedCount) return
+    // Cannot go below 0
+    if (newTotal < 0) return
+
+    setFormData({ ...formData, total_credits: newTotal })
+  }
+
   const handleSaveSponsor = async () => {
     setSaving(true)
     try {
@@ -160,10 +179,12 @@ export default function SponsorsPage() {
             contact_email: formData.contact_email,
             payment_method: formData.payment_method,
             payment_status: formData.payment_status,
+            total_credits: formData.total_credits,
           }),
         })
         if (!response.ok) {
-          throw new Error('Failed to update sponsor')
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to update sponsor')
         }
       } else {
         // Create new sponsor
@@ -520,6 +541,66 @@ export default function SponsorsPage() {
                 </Select>
               </div>
             </div>
+
+            {/* Credits Adjustment - Only show when editing */}
+            {editingSponsor && (
+              <div className="space-y-3 pt-4 border-t">
+                <Label>Team Entry Credits</Label>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => handleAdjustCredits(-1)}
+                      disabled={formData.total_credits <= getUsedCreditsCount()}
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <div className="w-16 text-center">
+                      <span className="text-2xl font-bold">{formData.total_credits}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8"
+                      onClick={() => handleAdjustCredits(1)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    <span className="text-green-600 font-medium">{formData.total_credits - getUsedCreditsCount()}</span> available,{' '}
+                    <span className="text-gray-600">{getUsedCreditsCount()}</span> used
+                  </div>
+                </div>
+                {formData.total_credits !== editingSponsor.total_credits && (
+                  <div className="text-sm bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-blue-700">
+                      {formData.total_credits > editingSponsor.total_credits ? (
+                        <>
+                          <span className="font-medium">Adding {formData.total_credits - editingSponsor.total_credits} credit(s).</span>{' '}
+                          New redemption codes will be generated and visible in the sponsor portal.
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium">Removing {editingSponsor.total_credits - formData.total_credits} credit(s).</span>{' '}
+                          Unused redemption codes will be deleted.
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {formData.total_credits <= getUsedCreditsCount() && getUsedCreditsCount() > 0 && (
+                  <div className="text-sm text-amber-600">
+                    Cannot reduce below {getUsedCreditsCount()} (credits already in use)
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter>

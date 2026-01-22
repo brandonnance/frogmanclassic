@@ -76,28 +76,45 @@ export async function POST(
       )
     }
 
-    // Create or find players and link to team
+    // Create or link players to team
     for (const playerData of players) {
       if (!playerData.firstName?.trim() || !playerData.lastName?.trim()) {
         continue
       }
 
-      // Create player
-      const { data: player, error: playerError } = await supabase
-        .from('players')
-        .insert({
-          first_name: playerData.firstName.trim(),
-          last_name: playerData.lastName.trim(),
-          email: playerData.email?.trim() || null,
-          phone: playerData.phone?.trim() || null,
-          ghin: playerData.ghin?.trim() || 'NONE'
-        })
-        .select()
-        .single()
+      let playerId: string
 
-      if (playerError || !player) {
-        console.error('Error creating player:', playerError)
-        continue
+      if (playerData.existingPlayerId) {
+        // Existing player - update GHIN if provided and was empty/NONE
+        playerId = playerData.existingPlayerId
+
+        if (playerData.ghin && playerData.ghin.trim() && playerData.ghin.trim() !== 'NONE') {
+          await supabase
+            .from('players')
+            .update({ ghin: playerData.ghin.trim() })
+            .eq('id', playerId)
+            .or('ghin.is.null,ghin.eq.NONE')
+        }
+      } else {
+        // New player - create record
+        const { data: player, error: playerError } = await supabase
+          .from('players')
+          .insert({
+            first_name: playerData.firstName.trim(),
+            last_name: playerData.lastName.trim(),
+            suffix: playerData.suffix?.trim() || null,
+            email: playerData.email?.trim() || null,
+            phone: playerData.phone?.trim() || null,
+            ghin: playerData.ghin?.trim() || 'NONE'
+          })
+          .select()
+          .single()
+
+        if (playerError || !player) {
+          console.error('Error creating player:', playerError)
+          continue
+        }
+        playerId = player.id
       }
 
       // Link player to team
@@ -105,7 +122,7 @@ export async function POST(
         .from('team_players')
         .insert({
           team_id: team.id,
-          player_id: player.id,
+          player_id: playerId,
           role: 'player'
         })
     }
@@ -126,6 +143,12 @@ export async function POST(
 
     // Send confirmation email
     const baseUrl = request.nextUrl.origin
+
+    // Build player names list for email
+    const playerNames = players
+      .filter((p: { firstName?: string; lastName?: string }) => p.firstName?.trim() && p.lastName?.trim())
+      .map((p: { firstName: string; lastName: string }) => `${p.firstName.trim()} ${p.lastName.trim()}`)
+
     try {
       await fetch(`${baseUrl}/api/email`, {
         method: 'POST',
@@ -137,7 +160,8 @@ export async function POST(
             teamName: teamName || 'Your Team',
             captainName: players[0]?.firstName || 'Captain',
             eventType,
-            sponsorName: sponsor.name
+            sponsorName: sponsor.name,
+            playerNames
           }
         })
       })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { generateMultipleCodes } from '@/lib/codes'
 
 export async function GET(
   request: NextRequest,
@@ -86,10 +87,10 @@ export async function PATCH(
     const body = await request.json()
     const supabase = createServerClient()
 
-    // Find sponsor by token
+    // Find sponsor by token with current total_credits
     const { data: sponsor, error: findError } = await supabase
       .from('sponsors')
-      .select('id')
+      .select('id, total_credits')
       .eq('access_token', token)
       .single()
 
@@ -100,27 +101,100 @@ export async function PATCH(
       )
     }
 
-    // Update sponsor
-    const { error: updateError } = await supabase
-      .from('sponsors')
-      .update({
-        name: body.name,
-        contact_name: body.contact_name,
-        contact_email: body.contact_email,
-        payment_method: body.payment_method,
-        payment_status: body.payment_status,
-      })
-      .eq('id', sponsor.id)
+    // Handle credit adjustment if total_credits is provided
+    let newCodes: string[] = []
+    if (body.total_credits !== undefined && body.total_credits !== sponsor.total_credits) {
+      const newTotal = body.total_credits
+      const currentTotal = sponsor.total_credits
 
-    if (updateError) {
-      console.error('Error updating sponsor:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update sponsor' },
-        { status: 500 }
-      )
+      // Get current credits and count used
+      const { data: credits } = await supabase
+        .from('sponsor_credits')
+        .select('id, redeemed_by_team_id')
+        .eq('sponsor_id', sponsor.id)
+
+      const usedCredits = credits?.filter(c => c.redeemed_by_team_id !== null) || []
+      const unusedCredits = credits?.filter(c => c.redeemed_by_team_id === null) || []
+      const usedCount = usedCredits.length
+
+      // Cannot reduce below used credits
+      if (newTotal < usedCount) {
+        return NextResponse.json(
+          { error: `Cannot reduce credits below ${usedCount} (currently in use)` },
+          { status: 400 }
+        )
+      }
+
+      if (newTotal < currentTotal) {
+        // Decreasing credits - delete unused credits
+        const creditsToDelete = currentTotal - newTotal
+        const idsToDelete = unusedCredits.slice(0, creditsToDelete).map(c => c.id)
+
+        if (idsToDelete.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('sponsor_credits')
+            .delete()
+            .in('id', idsToDelete)
+
+          if (deleteError) {
+            console.error('Error deleting credits:', deleteError)
+            return NextResponse.json(
+              { error: 'Failed to remove credits' },
+              { status: 500 }
+            )
+          }
+        }
+      } else if (newTotal > currentTotal) {
+        // Increasing credits - generate new codes
+        const creditsToAdd = newTotal - currentTotal
+        newCodes = generateMultipleCodes(creditsToAdd)
+
+        const newCredits = newCodes.map(code => ({
+          sponsor_id: sponsor.id,
+          redemption_code: code,
+          captain_email: null,
+        }))
+
+        const { error: insertError } = await supabase
+          .from('sponsor_credits')
+          .insert(newCredits)
+
+        if (insertError) {
+          console.error('Error adding credits:', insertError)
+          return NextResponse.json(
+            { error: 'Failed to add credits' },
+            { status: 500 }
+          )
+        }
+      }
     }
 
-    return NextResponse.json({ success: true })
+    // Build update object with only provided fields
+    const updates: Record<string, string | number | null> = {}
+    if (body.name !== undefined) updates.name = body.name
+    if (body.contact_name !== undefined) updates.contact_name = body.contact_name
+    if (body.contact_email !== undefined) updates.contact_email = body.contact_email
+    if (body.payment_method !== undefined) updates.payment_method = body.payment_method
+    if (body.payment_status !== undefined) updates.payment_status = body.payment_status
+    if (body.total_credits !== undefined) updates.total_credits = body.total_credits
+
+    // Update sponsor
+    if (Object.keys(updates).length > 0) {
+      const { error: updateError } = await supabase
+        .from('sponsors')
+        .update(updates)
+        .eq('id', sponsor.id)
+
+      if (updateError) {
+        console.error('Error updating sponsor:', updateError)
+        return NextResponse.json(
+          { error: 'Failed to update sponsor' },
+          { status: 500 }
+        )
+      }
+    }
+
+    return NextResponse.json({ success: true, newCodes })
   } catch (error) {
     console.error('Sponsor update error:', error)
     return NextResponse.json(

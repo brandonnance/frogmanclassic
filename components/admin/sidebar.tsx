@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -9,6 +10,7 @@ import {
   Building2,
   UsersRound,
   Calendar,
+  LogOut,
 } from 'lucide-react'
 
 const navigation = [
@@ -21,6 +23,21 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [eventYear, setEventYear] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch('/api/event-year')
+      .then(res => res.json())
+      .then(data => setEventYear(data.year))
+      .catch(() => setEventYear(2026))
+  }, [])
+
+  const handleLogout = async () => {
+    await fetch('/api/admin/auth', { method: 'DELETE' })
+    router.push('/admin/login')
+    router.refresh()
+  }
 
   return (
     <div className="flex h-full w-64 flex-col bg-green-800 text-white">
@@ -57,13 +74,17 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-green-700 p-4">
+      <div className="border-t border-green-700 p-4 space-y-3">
         <div className="text-xs text-green-300">
-          2025 Event Year
+          {eventYear ? `${eventYear} Event Year` : 'Loading...'}
         </div>
-        <div className="mt-1 text-xs text-green-400">
-          Demo Mode
-        </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 text-sm text-green-200 hover:text-white transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Logout
+        </button>
       </div>
     </div>
   )

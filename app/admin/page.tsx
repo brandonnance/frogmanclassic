@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
-import { Users, Building2, UsersRound, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react'
+import { Users, Building2, UsersRound, TrendingUp, AlertCircle, RefreshCw, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Sponsor {
@@ -28,7 +28,8 @@ interface Player {
 export default function AdminDashboard() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
   const [teams, setTeams] = useState<Team[]>([])
-  const [players, setPlayers] = useState<Player[]>([])
+  const [registeredPlayers, setRegisteredPlayers] = useState<Player[]>([])
+  const [directoryCount, setDirectoryCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -47,14 +48,13 @@ export default function AdminDashboard() {
       if (teamsRes.ok) {
         const data = await teamsRes.json()
         setTeams(data.teams || [])
-        // Players come from teams API
-        setPlayers(data.players || [])
+        // Registered players come from teams API (only players on teams for active year)
+        setRegisteredPlayers(data.players || [])
       }
       if (playersRes.ok) {
         const data = await playersRes.json()
-        if (data.players?.length > 0) {
-          setPlayers(data.players)
-        }
+        // Directory count is total players in system
+        setDirectoryCount(data.players?.length || 0)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -89,14 +89,23 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">Frogman Classic 2025 Overview</p>
+      <div className="space-y-4">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-green-600 transition-colors"
+        >
+          <Home className="w-4 h-4" />
+          Back to Home
+        </Link>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-500 mt-1">Frogman Classic 2026 Overview</p>
+          </div>
+          <Button variant="outline" size="icon" onClick={fetchData}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </div>
-        <Button variant="outline" size="icon" onClick={fetchData}>
-          <RefreshCw className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Main Stats */}
@@ -104,13 +113,13 @@ export default function AdminDashboard() {
         <Link href="/admin/players">
           <Card className="hover:shadow-md transition-shadow cursor-pointer">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Players</CardTitle>
+              <CardTitle className="text-sm font-medium">Registered Players</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{players.length}</div>
+              <div className="text-2xl font-bold">{registeredPlayers.length}</div>
               <p className="text-xs text-muted-foreground">
-                Registered players
+                {directoryCount} in player directory
               </p>
             </CardContent>
           </Card>

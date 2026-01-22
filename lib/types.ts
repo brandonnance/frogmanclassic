@@ -70,12 +70,25 @@ export interface Player {
   id: string
   first_name: string
   last_name: string
+  suffix: string | null
   email: string | null
   phone: string | null
   ghin: string
   handicap_raw: number | null
   plays_yellow_tees: boolean
+  home_course: string | null
   last_handicap_update_at: string | null
+}
+
+// Input type for registration forms
+export interface PlayerInput {
+  firstName: string
+  lastName: string
+  suffix: string
+  email: string
+  phone: string
+  ghin: string
+  existingPlayerId?: string
 }
 
 export interface TeamPlayer {

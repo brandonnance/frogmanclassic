@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CheckCircle2, Check, Info } from 'lucide-react'
+import { CheckCircle2, Check, Info, ArrowLeft } from 'lucide-react'
 import { sponsorshipPackages, getPackageById, formatPrice, getEntryDescription } from '@/lib/sponsorship-packages'
+import { SponsorshipPackagesModal } from '@/components/sponsorship-packages-modal'
 import type { PaymentMethod, SponsorshipPackage } from '@/lib/types'
 
 interface FormData {
@@ -113,6 +115,11 @@ export default function SponsorSignupPage() {
             <p className="text-sm text-gray-600 text-center">
               Check your inbox for next steps. If you don&apos;t see the email, check your spam folder.
             </p>
+            <div className="pt-4">
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/">Return to Home</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -122,11 +129,20 @@ export default function SponsorSignupPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white py-8 px-4">
       <div className="max-w-2xl mx-auto">
+        <div className="mb-4">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-green-600 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Link>
+        </div>
         <Card>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Become a Frogman Classic Sponsor</CardTitle>
             <CardDescription>
-              Support Navy SEAL families while enjoying a day of golf
+              Support our veterans while enjoying great golf
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -172,7 +188,20 @@ export default function SponsorSignupPage() {
 
               {/* Sponsorship Package */}
               <div className="space-y-2">
-                <Label htmlFor="packageId">Sponsorship Package</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="packageId">Sponsorship Package</Label>
+                  <SponsorshipPackagesModal
+                    showCta={false}
+                    trigger={
+                      <button
+                        type="button"
+                        className="text-xs text-green-600 hover:text-green-700 hover:underline"
+                      >
+                        (view all levels)
+                      </button>
+                    }
+                  />
+                </div>
                 <Select
                   value={formData.packageId}
                   onValueChange={(value) => setFormData({ ...formData, packageId: value })}
