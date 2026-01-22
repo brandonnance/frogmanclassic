@@ -1,9 +1,9 @@
 # Frogman Classic - Platform Documentation
 
 ## Current Status: LIVE
-- **Live URL**: https://frogman.brandon-nance.com
-- **Sponsor Signup**: https://frogman.brandon-nance.com/sponsor
-- **Admin Panel**: https://frogman.brandon-nance.com/admin
+- **Live URL**: https://frogmanclassic.com
+- **Sponsor Signup**: https://frogmanclassic.com/sponsor
+- **Admin Panel**: https://frogmanclassic.com/admin
 - **GitHub**: https://github.com/brandonnance/frogmanclassic
 
 ---
@@ -89,7 +89,7 @@ Implemented pricing and registration flow changes:
 - **Database**: Supabase (PostgreSQL)
 - **Email**: Resend
 - **Deployment**: Vercel
-- **DNS**: Cloudflare
+- **DNS**: GoDaddy
 
 ### Core Entities
 
@@ -133,8 +133,8 @@ Implemented pricing and registration flow changes:
 - `/redeem/[code]` - Team registration with code redemption (supports both events)
 
 ### Email Integration
-- Resend configured with domain: `frogman.brandon-nance.com`
-- FROM address: `Frogman Classic <noreply@frogman.brandon-nance.com>`
+- Resend configured with domain: `frogmanclassic.com`
+- FROM address: `Frogman Classic <noreply@frogmanclassic.com>`
 - Email types:
   - `sponsor_welcome` - All codes + portal link
   - `captain_code` - Single code to team captain
@@ -316,8 +316,8 @@ else: status = 'stale'
 - **Project ID**: zwdgwbhpntjolbpdzybi
 - Keys stored in .env.local and Vercel
 
-### Cloudflare DNS
-- CNAME: frogman.brandon-nance.com → cname.vercel-dns.com
+### GoDaddy DNS
+- Domain: frogmanclassic.com → Vercel
 
 ---
 
