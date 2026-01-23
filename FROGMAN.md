@@ -16,6 +16,19 @@ No active work in progress.
 
 ## Recently Completed
 
+### Sponsorship Package Limits (Jan 2026)
+Director can set limited availability on sponsorship packages:
+- ✅ `max_sponsors` field on packages (0 = unlimited, positive number = limited)
+- ✅ Admin UI to set "Unlimited" or "Limited" with number input
+- ✅ Availability column in admin packages table (shows current/max, e.g., "2/5" or "3/∞")
+- ✅ Sold out packages display with visual treatment in modal:
+  - Diagonal strikethrough line
+  - Faded/grayed styling (60% opacity)
+  - Red "SOLD OUT" badge
+- ✅ Sold out packages shown but unavailable (not hidden)
+- ✅ Sponsor signup dropdown excludes unavailable packages
+- ✅ Backend validation rejects submissions for full packages
+
 ### Admin Teams Management (Jan 2026)
 Full CRUD operations for teams with player management:
 - ✅ Edit team metadata (name, session preference, notes)

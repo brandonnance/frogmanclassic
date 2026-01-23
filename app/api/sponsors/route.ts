@@ -86,6 +86,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if package is available (not full)
+    const isAvailable = await packageRepo.isPackageAvailable(packageId)
+    if (!isAvailable) {
+      return NextResponse.json(
+        { error: 'This sponsorship package is no longer available. Please select a different package.' },
+        { status: 400 }
+      )
+    }
+
     // Determine payment status
     const paymentStatus: PaymentStatus = paymentMethod === 'online'
       ? 'pending_online'

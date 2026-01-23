@@ -42,6 +42,8 @@ interface SponsorshipPackage {
   benefits: string[]
   display_order: number
   is_active: boolean
+  max_sponsors: number // 0 = unlimited
+  sponsor_count: number // current count of sponsors
   created_at: string
 }
 
@@ -70,6 +72,7 @@ export default function PackagesPage() {
     sealPlay: 'none' as 'none' | 'one' | 'both',
     benefits: [] as string[],
     isActive: true,
+    maxSponsors: 0, // 0 = unlimited
   })
   const [newBenefit, setNewBenefit] = useState('')
 
@@ -104,6 +107,7 @@ export default function PackagesPage() {
       sealPlay: 'none',
       benefits: [],
       isActive: true,
+      maxSponsors: 0,
     })
     setNewBenefit('')
     setDialogOpen(true)
@@ -119,6 +123,7 @@ export default function PackagesPage() {
       sealPlay: pkg.seal_play,
       benefits: [...pkg.benefits],
       isActive: pkg.is_active,
+      maxSponsors: pkg.max_sponsors,
     })
     setNewBenefit('')
     setDialogOpen(true)
@@ -157,6 +162,7 @@ export default function PackagesPage() {
             sealPlay: formData.sealPlay,
             benefits: formData.benefits,
             isActive: formData.isActive,
+            maxSponsors: formData.maxSponsors,
           }),
         })
         if (!response.ok) {
@@ -175,6 +181,7 @@ export default function PackagesPage() {
             dinnerTables: formData.dinnerTables,
             sealPlay: formData.sealPlay,
             benefits: formData.benefits,
+            maxSponsors: formData.maxSponsors,
           }),
         })
         if (!response.ok) {
@@ -278,6 +285,7 @@ export default function PackagesPage() {
               <TableHead className="text-center">Entries</TableHead>
               <TableHead className="text-center">Dinner</TableHead>
               <TableHead className="text-center">SEAL Play</TableHead>
+              <TableHead className="text-center">Availability</TableHead>
               <TableHead>Benefits</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <TableHead className="w-[120px]">Actions</TableHead>
@@ -286,7 +294,7 @@ export default function PackagesPage() {
           <TableBody>
             {sortedPackages.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                   No packages found. Add your first sponsorship package.
                 </TableCell>
               </TableRow>
@@ -323,6 +331,21 @@ export default function PackagesPage() {
                       <Badge variant="secondary">One Event</Badge>
                     ) : (
                       <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {pkg.max_sponsors === 0 ? (
+                      <span className="text-gray-500">
+                        {pkg.sponsor_count} / <span className="text-xs">∞</span>
+                      </span>
+                    ) : pkg.sponsor_count >= pkg.max_sponsors ? (
+                      <Badge variant="destructive">
+                        {pkg.sponsor_count} / {pkg.max_sponsors}
+                      </Badge>
+                    ) : (
+                      <span className="text-gray-600">
+                        {pkg.sponsor_count} / {pkg.max_sponsors}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -461,6 +484,46 @@ export default function PackagesPage() {
                     <SelectItem value="both">Both Events</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Max Sponsors</Label>
+              <div className="flex items-center gap-4">
+                <Select
+                  value={formData.maxSponsors === 0 ? 'unlimited' : 'limited'}
+                  onValueChange={(value) => {
+                    if (value === 'unlimited') {
+                      setFormData({ ...formData, maxSponsors: 0 })
+                    } else {
+                      setFormData({ ...formData, maxSponsors: 1 })
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unlimited">Unlimited</SelectItem>
+                    <SelectItem value="limited">Limited</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formData.maxSponsors > 0 && (
+                  <Input
+                    type="number"
+                    min="1"
+                    className="w-[100px]"
+                    value={formData.maxSponsors}
+                    onChange={(e) =>
+                      setFormData({ ...formData, maxSponsors: parseInt(e.target.value) || 1 })
+                    }
+                  />
+                )}
+                <span className="text-sm text-gray-500">
+                  {formData.maxSponsors === 0
+                    ? 'Any number of sponsors can select this package'
+                    : `Only ${formData.maxSponsors} sponsor${formData.maxSponsors > 1 ? 's' : ''} can select this package`}
+                </span>
               </div>
             </div>
 

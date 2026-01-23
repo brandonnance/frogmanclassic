@@ -19,8 +19,8 @@ export async function GET() {
       return NextResponse.json({ packages: [] })
     }
 
-    // Fetch all packages (including inactive) for admin
-    const packages = await packageRepo.getAllPackages(eventYear.id)
+    // Fetch all packages with sponsor counts (including inactive) for admin
+    const packages = await packageRepo.getPackagesWithSponsorCounts(eventYear.id, false)
 
     return NextResponse.json({ packages })
   } catch (error) {
@@ -35,7 +35,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, price, includedEntries, dinnerTables, sealPlay, benefits } = body
+    const { name, price, includedEntries, dinnerTables, sealPlay, benefits, maxSponsors } = body
 
     if (!name || price === undefined) {
       return NextResponse.json(
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       seal_play: sealPlay ?? 'none',
       benefits: benefits ?? [],
       display_order: maxOrder + 1,
+      max_sponsors: maxSponsors ?? 0, // 0 = unlimited
     })
 
     return NextResponse.json({ success: true, package: pkg })

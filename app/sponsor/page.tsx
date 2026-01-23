@@ -21,6 +21,14 @@ interface SponsorshipPackageDB {
   benefits: string[]
   display_order: number
   is_active: boolean
+  max_sponsors: number // 0 = unlimited
+  sponsor_count: number
+}
+
+function isPackageAvailable(pkg: SponsorshipPackageDB): boolean {
+  if (!pkg.is_active) return false
+  if (pkg.max_sponsors === 0) return true // unlimited
+  return pkg.sponsor_count < pkg.max_sponsors
 }
 
 function formatPrice(price: number): string {
@@ -90,11 +98,11 @@ export default function SponsorSignupPage() {
       const response = await fetch('/api/packages')
       if (response.ok) {
         const data = await response.json()
-        // Only show active packages, sorted by display order
-        const activePackages = (data.packages || [])
-          .filter((p: SponsorshipPackageDB) => p.is_active)
+        // Only show available packages (active and not sold out), sorted by display order
+        const availablePackages = (data.packages || [])
+          .filter((p: SponsorshipPackageDB) => isPackageAvailable(p))
           .sort((a: SponsorshipPackageDB, b: SponsorshipPackageDB) => a.display_order - b.display_order)
-        setPackages(activePackages)
+        setPackages(availablePackages)
       }
     } catch (err) {
       console.error('Failed to load packages:', err)

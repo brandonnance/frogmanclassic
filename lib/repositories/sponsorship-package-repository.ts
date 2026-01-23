@@ -13,7 +13,13 @@ export interface SponsorshipPackageDB {
   benefits: string[]
   display_order: number
   is_active: boolean
+  max_sponsors: number // 0 = unlimited, positive number = limited
   created_at: string
+}
+
+// Package with current sponsor count for availability checking
+export interface SponsorshipPackageWithCount extends SponsorshipPackageDB {
+  sponsor_count: number
 }
 
 export interface CreatePackageData {
@@ -26,6 +32,7 @@ export interface CreatePackageData {
   benefits?: string[]
   display_order?: number
   is_active?: boolean
+  max_sponsors?: number // 0 = unlimited
 }
 
 export interface UpdatePackageData {
@@ -37,6 +44,7 @@ export interface UpdatePackageData {
   benefits?: string[]
   display_order?: number
   is_active?: boolean
+  max_sponsors?: number // 0 = unlimited
 }
 
 export class SponsorshipPackageRepository extends BaseRepository {
@@ -102,6 +110,7 @@ export class SponsorshipPackageRepository extends BaseRepository {
         benefits: packageData.benefits ?? [],
         display_order: packageData.display_order ?? 0,
         is_active: packageData.is_active ?? true,
+        max_sponsors: packageData.max_sponsors ?? 0,
       })
       .select()
       .single()
@@ -147,6 +156,67 @@ export class SponsorshipPackageRepository extends BaseRepository {
     return this.update(id, { display_order: newOrder })
   }
 
+  // Get packages with sponsor counts for availability checking
+  async getPackagesWithSponsorCounts(eventYearId: string, activeOnly = false): Promise<SponsorshipPackageWithCount[]> {
+    // First get all packages
+    const packages = await this.getByEventYear(eventYearId, activeOnly)
+
+    if (packages.length === 0) {
+      return []
+    }
+
+    // Get sponsor counts per package
+    const packageIds = packages.map(p => p.id)
+    const { data: countData, error: countError } = await this.client
+      .from('sponsors')
+      .select('package_id')
+      .eq('event_year_id', eventYearId)
+      .in('package_id', packageIds)
+
+    if (countError) {
+      this.handleError('fetch sponsor counts', countError)
+    }
+
+    // Build count map
+    const countMap = new Map<string, number>()
+    for (const row of countData ?? []) {
+      const count = countMap.get(row.package_id) || 0
+      countMap.set(row.package_id, count + 1)
+    }
+
+    // Merge counts with packages
+    return packages.map(pkg => ({
+      ...pkg,
+      sponsor_count: countMap.get(pkg.id) || 0,
+    }))
+  }
+
+  // Check if a package is available (not full)
+  async isPackageAvailable(packageId: string): Promise<boolean> {
+    const pkg = await this.getById(packageId)
+    if (!pkg || !pkg.is_active) {
+      return false
+    }
+
+    // If max_sponsors is 0, it's unlimited
+    if (pkg.max_sponsors === 0) {
+      return true
+    }
+
+    // Count current sponsors for this package
+    const { count, error } = await this.client
+      .from('sponsors')
+      .select('*', { count: 'exact', head: true })
+      .eq('package_id', packageId)
+      .eq('event_year_id', pkg.event_year_id)
+
+    if (error) {
+      this.handleError('check package availability', error)
+    }
+
+    return (count ?? 0) < pkg.max_sponsors
+  }
+
   async getMaxDisplayOrder(eventYearId: string): Promise<number> {
     const { data, error } = await this.client
       .from('sponsorship_packages')
@@ -184,6 +254,7 @@ export class SponsorshipPackageRepository extends BaseRepository {
       benefits: pkg.benefits,
       display_order: pkg.display_order,
       is_active: pkg.is_active,
+      max_sponsors: pkg.max_sponsors,
     }))
 
     const { data, error } = await this.client

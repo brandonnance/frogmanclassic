@@ -40,7 +40,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, price, includedEntries, dinnerTables, sealPlay, benefits, isActive, displayOrder } = body
+    const { name, price, includedEntries, dinnerTables, sealPlay, benefits, isActive, displayOrder, maxSponsors } = body
 
     const supabase = createServerClient()
     const packageRepo = getSponsorshipPackageRepository(supabase)
@@ -64,6 +64,7 @@ export async function PATCH(
     if (benefits !== undefined) updates.benefits = benefits
     if (isActive !== undefined) updates.is_active = isActive
     if (displayOrder !== undefined) updates.display_order = displayOrder
+    if (maxSponsors !== undefined) updates.max_sponsors = maxSponsors
 
     const pkg = await packageRepo.update(id, updates)
 
