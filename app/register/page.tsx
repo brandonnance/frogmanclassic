@@ -11,6 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { CheckCircle2, AlertCircle, Ticket, DollarSign, Info } from 'lucide-react'
 import { PlayerAutocomplete } from '@/components/player-autocomplete'
+import {
+  tournamentConfig,
+  getTournamentFullName,
+  getCodePrefix,
+  formatSessionTime,
+} from '@/lib/config/tournament.config'
 
 interface PlayerInput {
   firstName: string
@@ -35,20 +41,20 @@ const emptyPlayer: PlayerInput = {
 
 type PaymentMethod = 'check' | 'invoice' | 'venmo' | 'paypal'
 
-const paymentMethods: { value: PaymentMethod; label: string }[] = [
-  { value: 'check', label: 'Check' },
-  { value: 'invoice', label: 'Invoice / ACH' },
-  { value: 'venmo', label: 'Venmo' },
-  { value: 'paypal', label: 'PayPal' },
-]
+// Get payment methods from config
+const paymentMethods = tournamentConfig.paymentMethods
+
+// Config shortcuts
+const { tournament, events, venue, dates, sponsorship, sessions } = tournamentConfig
+const fullName = getTournamentFullName()
 
 // Entry fees - Friday is sponsor-only, open registration is Sat/Sun only
 const SAT_SUN_EVENT = {
-  price: 500,
-  label: 'Saturday/Sunday 2-Man Best Ball',
-  players: 2,
-  date: 'Saturday–Sunday, Sept 12-13',
-  sunWillowsDiscount: 50, // $50 off per Sun Willows member
+  price: events.satSun.basePrice,
+  label: `${events.satSun.name}`,
+  players: events.satSun.teamSize,
+  date: dates.satSun,
+  sunWillowsDiscount: venue.memberDiscount,
 }
 
 export default function RegisterPage() {
@@ -156,7 +162,7 @@ export default function RegisterPage() {
               />
             </Link>
             <h1 className="text-3xl font-bold text-green-800">Register Your Team</h1>
-            <p className="text-gray-600 mt-2">Frogman Classic 2026</p>
+            <p className="text-gray-600 mt-2">{fullName}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -217,7 +223,7 @@ export default function RegisterPage() {
               />
             </Link>
             <h1 className="text-3xl font-bold text-green-800">Enter Your Code</h1>
-            <p className="text-gray-600 mt-2">Frogman Classic 2026</p>
+            <p className="text-gray-600 mt-2">{fullName}</p>
           </div>
 
           <Card>
@@ -234,7 +240,7 @@ export default function RegisterPage() {
                   id="code"
                   value={redemptionCode}
                   onChange={(e) => setRedemptionCode(e.target.value.toUpperCase())}
-                  placeholder="FROG-2025-XXXX"
+                  placeholder={`${getCodePrefix()}-${tournament.year}-XXXX`}
                   className="font-mono text-center text-lg"
                 />
               </div>
@@ -272,7 +278,7 @@ export default function RegisterPage() {
             </div>
             <CardTitle>Team Registered!</CardTitle>
             <CardDescription>
-              Your team has been registered for Frogman Classic 2026
+              Your team has been registered for {fullName}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -315,7 +321,7 @@ export default function RegisterPage() {
             />
           </Link>
           <h1 className="text-3xl font-bold text-green-800">Register Your Team</h1>
-          <p className="text-gray-600 mt-2">Frogman Classic 2026</p>
+          <p className="text-gray-600 mt-2">{fullName}</p>
           <Button
             variant="ghost"
             size="sm"
@@ -330,7 +336,7 @@ export default function RegisterPage() {
           {/* Event Info */}
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>Saturday/Sunday 2-Man Best Ball</CardTitle>
+              <CardTitle>{SAT_SUN_EVENT.label}</CardTitle>
               <CardDescription>{SAT_SUN_EVENT.date}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -344,11 +350,11 @@ export default function RegisterPage() {
                   )}
                 </div>
                 <div className="text-sm text-gray-600">
-                  2-person team · 36 holes over 2 days
+                  {SAT_SUN_EVENT.players}-person team · 36 holes over 2 days
                 </div>
                 {sunWillowsDiscount > 0 && (
                   <div className="text-sm text-green-600 mt-1">
-                    ${sunWillowsDiscount} Sun Willows member discount applied
+                    ${sunWillowsDiscount} {venue.name} member discount applied
                   </div>
                 )}
               </div>
@@ -360,8 +366,8 @@ export default function RegisterPage() {
                   <div className="text-sm text-amber-800">
                     <p className="font-medium mb-1">Want to play Friday?</p>
                     <p>
-                      Friday Florida Scramble entries are only available through sponsorship.
-                      Become a Hole Sponsor ($1,500+) to receive a team entry for the Friday event.{' '}
+                      Friday {events.friday.name} entries are only available through sponsorship.
+                      Become a Hole Sponsor (${sponsorship.entryPackageMinPrice.toLocaleString()}+) to receive a team entry for the Friday event.{' '}
                       <Link href="/sponsor" className="text-amber-700 underline hover:text-amber-900">
                         View sponsorship packages
                       </Link>
@@ -401,8 +407,8 @@ export default function RegisterPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">No Preference</SelectItem>
-                        <SelectItem value="am">Morning (7:30 AM)</SelectItem>
-                        <SelectItem value="pm">Afternoon (1:00 PM)</SelectItem>
+                        <SelectItem value="am">{formatSessionTime('am')}</SelectItem>
+                        <SelectItem value="pm">{formatSessionTime('pm')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -450,8 +456,8 @@ export default function RegisterPage() {
                           }
                         />
                         <Label htmlFor={`sunWillows-${index}`} className="text-sm cursor-pointer">
-                          Sun Willows Golf Course member
-                          <span className="text-green-600 ml-1">($50 discount)</span>
+                          {venue.memberLabel}
+                          <span className="text-green-600 ml-1">(${venue.memberDiscount} discount)</span>
                         </Label>
                       </div>
                     </div>
@@ -466,7 +472,7 @@ export default function RegisterPage() {
                   <CardDescription>
                     Entry fee: <strong>${currentPrice}</strong> per team
                     {sunWillowsDiscount > 0 && (
-                      <span className="text-green-600 ml-1">(${sunWillowsDiscount} Sun Willows discount applied)</span>
+                      <span className="text-green-600 ml-1">(${sunWillowsDiscount} {venue.name} discount applied)</span>
                     )}
                   </CardDescription>
                 </CardHeader>

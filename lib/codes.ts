@@ -1,5 +1,7 @@
 // Redemption code generation utility
 
+import { getCodePrefix } from '@/lib/config/tournament.config'
+
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // Excludes I, O, 0, 1 for clarity
 
 function generateRandomChars(length: number): string {
@@ -11,9 +13,10 @@ function generateRandomChars(length: number): string {
 }
 
 export function generateRedemptionCode(): string {
+  const prefix = getCodePrefix()
   const year = new Date().getFullYear()
   const randomPart = generateRandomChars(4)
-  return `FROG-${year}-${randomPart}`
+  return `${prefix}-${year}-${randomPart}`
 }
 
 export function generateMultipleCodes(count: number): string[] {

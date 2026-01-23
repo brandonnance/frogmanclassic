@@ -29,8 +29,28 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Plus, Search, Edit2, Trash2, Download, RefreshCw, ExternalLink, Minus, AlertCircle } from 'lucide-react'
-import { getPackageById, formatPrice } from '@/lib/sponsorship-packages'
 import type { PaymentMethod, PaymentStatus } from '@/lib/types'
+
+interface SponsorshipPackage {
+  id: string
+  name: string
+  price: number
+  included_entries: number
+  dinner_tables: number
+  seal_play: 'none' | 'one' | 'both'
+  benefits: string[]
+  display_order: number
+  is_active: boolean
+}
+
+function formatPrice(price: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price)
+}
 
 interface Sponsor {
   id: string
@@ -61,6 +81,7 @@ interface SponsorCredit {
 export default function SponsorsPage() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
   const [credits, setCredits] = useState<SponsorCredit[]>([])
+  const [packages, setPackages] = useState<SponsorshipPackage[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -72,11 +93,23 @@ export default function SponsorsPage() {
     name: '',
     contact_name: '',
     contact_email: '',
-    package_id: 'hole_1000',
+    package_id: '',
     payment_method: 'check' as PaymentMethod,
     payment_status: 'pending_offline' as PaymentStatus,
     total_credits: 1,
   })
+
+  // Helper to get package by ID
+  const getPackageById = useCallback((id: string) => {
+    return packages.find(p => p.id === id)
+  }, [packages])
+
+  // Get active packages sorted by display order
+  const activePackages = useMemo(() => {
+    return packages
+      .filter(p => p.is_active)
+      .sort((a, b) => a.display_order - b.display_order)
+  }, [packages])
 
   const fetchSponsors = useCallback(async () => {
     try {
@@ -89,6 +122,7 @@ export default function SponsorsPage() {
       const data = await response.json()
       setSponsors(data.sponsors || [])
       setCredits(data.credits || [])
+      setPackages(data.packages || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sponsors')
     } finally {
@@ -124,7 +158,7 @@ export default function SponsorsPage() {
       name: '',
       contact_name: '',
       contact_email: '',
-      package_id: 'hole_1000',
+      package_id: activePackages[0]?.id || '',
       payment_method: 'check',
       payment_status: 'pending_offline',
       total_credits: 1,
@@ -188,7 +222,6 @@ export default function SponsorsPage() {
         }
       } else {
         // Create new sponsor
-        const pkg = getPackageById(formData.package_id)
         const response = await fetch('/api/sponsors', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -483,19 +516,14 @@ export default function SponsorsPage() {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select a package" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="hole_1000">$1,000 Hole Sponsor</SelectItem>
-                    <SelectItem value="event_1500">$1,500 Event Sponsor</SelectItem>
-                    <SelectItem value="hole_2500">$2,500 Hole Sponsor</SelectItem>
-                    <SelectItem value="golf_cart">$2,500 Golf Cart Sponsor</SelectItem>
-                    <SelectItem value="driving_range">$2,500 Driving Range Sponsor</SelectItem>
-                    <SelectItem value="tee_block">$3,000 Tee Block Sponsor</SelectItem>
-                    <SelectItem value="flag">$3,500 Flag Sponsor</SelectItem>
-                    <SelectItem value="seal">$5,000 SEAL Sponsor</SelectItem>
-                    <SelectItem value="tee_prize">$7,500 Tee Prize Sponsor</SelectItem>
-                    <SelectItem value="tournament">$10,000+ Tournament Sponsor</SelectItem>
+                    {activePackages.map((pkg) => (
+                      <SelectItem key={pkg.id} value={pkg.id}>
+                        {formatPrice(pkg.price)} - {pkg.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

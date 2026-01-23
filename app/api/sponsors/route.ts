@@ -1,69 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { generateMultipleCodes } from '@/lib/codes'
-import { getPackageById } from '@/lib/sponsorship-packages'
+import {
+  getSponsorRepository,
+  getCreditRepository,
+  getEventYearRepository,
+  getSponsorshipPackageRepository,
+  RepositoryError,
+} from '@/lib/repositories'
 import type { PaymentMethod, PaymentStatus } from '@/lib/types'
 
 export async function GET() {
   try {
     const supabase = createServerClient()
+    const eventYearRepo = getEventYearRepository(supabase)
+    const sponsorRepo = getSponsorRepository(supabase)
+    const creditRepo = getCreditRepository(supabase)
+    const packageRepo = getSponsorshipPackageRepository(supabase)
 
     // Get active event year
-    const { data: eventYear } = await supabase
-      .from('event_years')
-      .select('id')
-      .eq('is_active', true)
-      .single()
+    const eventYear = await eventYearRepo.getActive()
 
     if (!eventYear) {
-      return NextResponse.json({ sponsors: [], credits: [] })
+      return NextResponse.json({ sponsors: [], credits: [], packages: [] })
     }
 
-    // Fetch sponsors for active year with credits
-    const { data: sponsors, error: sponsorsError } = await supabase
-      .from('sponsors')
-      .select('*')
-      .eq('event_year_id', eventYear.id)
-      .order('created_at', { ascending: false })
-
-    if (sponsorsError) {
-      console.error('Error fetching sponsors:', sponsorsError)
-      return NextResponse.json(
-        { error: 'Failed to fetch sponsors' },
-        { status: 500 }
-      )
-    }
+    // Fetch sponsors with credits_used calculated
+    const sponsors = await sponsorRepo.getByEventYearWithCreditsUsed(eventYear.id)
 
     // Fetch all credits for these sponsors
-    const sponsorIds = sponsors?.map(s => s.id) || []
-    let credits: { id: string; sponsor_id: string; redemption_code: string; redeemed_by_team_id: string | null; redeemed_at: string | null; captain_email: string | null; email_sent_at: string | null; created_at: string }[] = []
+    const sponsorIds = sponsors.map(s => s.id)
+    const credits = await creditRepo.getBySponsorIds(sponsorIds)
 
-    if (sponsorIds.length > 0) {
-      const { data: creditsData, error: creditsError } = await supabase
-        .from('sponsor_credits')
-        .select('*')
-        .in('sponsor_id', sponsorIds)
-
-      if (creditsError) {
-        console.error('Error fetching credits:', creditsError)
-      } else {
-        credits = creditsData || []
-      }
-    }
-
-    // Calculate credits_used for each sponsor
-    const sponsorsWithCredits = sponsors?.map(sponsor => {
-      const sponsorCredits = credits.filter(c => c.sponsor_id === sponsor.id)
-      const creditsUsed = sponsorCredits.filter(c => c.redeemed_by_team_id !== null).length
-      return {
-        ...sponsor,
-        credits_used: creditsUsed
-      }
-    }) || []
+    // Fetch all packages (including inactive) for admin display
+    const packages = await packageRepo.getAllPackages(eventYear.id)
 
     return NextResponse.json({
-      sponsors: sponsorsWithCredits,
-      credits
+      sponsors,
+      credits,
+      packages,
     })
   } catch (error) {
     console.error('Error fetching sponsors:', error)
@@ -86,28 +61,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate package
-    const pkg = getPackageById(packageId)
-    if (!pkg) {
-      return NextResponse.json(
-        { error: 'Invalid sponsorship package' },
-        { status: 400 }
-      )
-    }
-
     const supabase = createServerClient()
+    const eventYearRepo = getEventYearRepository(supabase)
+    const sponsorRepo = getSponsorRepository(supabase)
+    const creditRepo = getCreditRepository(supabase)
+    const packageRepo = getSponsorshipPackageRepository(supabase)
 
     // Get active event year
-    const { data: eventYear, error: eventYearError } = await supabase
-      .from('event_years')
-      .select('id')
-      .eq('is_active', true)
-      .single()
+    const eventYear = await eventYearRepo.getActive()
 
-    if (eventYearError || !eventYear) {
+    if (!eventYear) {
       return NextResponse.json(
         { error: 'No active event year found' },
         { status: 500 }
+      )
+    }
+
+    // Validate package from database
+    const pkg = await packageRepo.getById(packageId)
+    if (!pkg || !pkg.is_active) {
+      return NextResponse.json(
+        { error: 'Invalid sponsorship package' },
+        { status: 400 }
       )
     }
 
@@ -117,48 +92,32 @@ export async function POST(request: NextRequest) {
       : 'pending_offline'
 
     // Create sponsor
-    const { data: sponsor, error: sponsorError } = await supabase
-      .from('sponsors')
-      .insert({
-        event_year_id: eventYear.id,
-        name: companyName,
-        contact_name: contactName,
-        contact_email: contactEmail,
-        package_id: packageId,
-        payment_method: paymentMethod as PaymentMethod,
-        payment_status: paymentStatus,
-        total_credits: pkg.includedEntries,
-      })
-      .select()
-      .single()
-
-    if (sponsorError || !sponsor) {
-      console.error('Error creating sponsor:', sponsorError)
-      return NextResponse.json(
-        { error: 'Failed to create sponsor' },
-        { status: 500 }
-      )
-    }
+    const sponsor = await sponsorRepo.create({
+      event_year_id: eventYear.id,
+      name: companyName,
+      contact_name: contactName,
+      contact_email: contactEmail,
+      package_id: packageId,
+      payment_method: paymentMethod as PaymentMethod,
+      payment_status: paymentStatus,
+      total_credits: pkg.included_entries,
+    })
 
     // Generate redemption codes if there are included entries
-    if (pkg.includedEntries > 0) {
-      const codes = generateMultipleCodes(pkg.includedEntries)
+    if (pkg.included_entries > 0) {
+      const codes = generateMultipleCodes(pkg.included_entries)
 
-      // Create sponsor credits
-      const credits = codes.map((code) => ({
-        sponsor_id: sponsor.id,
-        redemption_code: code,
-        captain_email: null,
-      }))
-
-      const { error: creditsError } = await supabase
-        .from('sponsor_credits')
-        .insert(credits)
-
-      if (creditsError) {
+      try {
+        await creditRepo.createMany(
+          codes.map(code => ({
+            sponsor_id: sponsor.id,
+            redemption_code: code,
+          }))
+        )
+      } catch (creditsError) {
         console.error('Error creating credits:', creditsError)
         // Rollback sponsor creation
-        await supabase.from('sponsors').delete().eq('id', sponsor.id)
+        await sponsorRepo.delete(sponsor.id)
         return NextResponse.json(
           { error: 'Failed to create redemption codes' },
           { status: 500 }
@@ -183,7 +142,7 @@ export async function POST(request: NextRequest) {
             contactName,
             packageName: pkg.name,
             packagePrice: pkg.price,
-            includedEntries: pkg.includedEntries,
+            includedEntries: pkg.included_entries,
             benefits: pkg.benefits,
             paymentMethod,
             editUrl,
@@ -202,6 +161,14 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Sponsor creation error:', error)
+
+    if (error instanceof RepositoryError) {
+      return NextResponse.json(
+        { error: 'Failed to create sponsor' },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

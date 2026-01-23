@@ -11,12 +11,17 @@ import {
   UsersRound,
   Calendar,
   LogOut,
+  Package,
 } from 'lucide-react'
+import { tournamentConfig } from '@/lib/config/tournament.config'
+
+const { tournament, branding } = tournamentConfig
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Players', href: '/admin/players', icon: Users },
   { name: 'Sponsors', href: '/admin/sponsors', icon: Building2 },
+  { name: 'Packages', href: '/admin/packages', icon: Package },
   { name: 'Teams', href: '/admin/teams', icon: UsersRound },
   { name: 'Tee Sheets', href: '/admin/tee-sheets', icon: Calendar },
 ]
@@ -30,7 +35,7 @@ export function Sidebar() {
     fetch('/api/event-year')
       .then(res => res.json())
       .then(data => setEventYear(data.year))
-      .catch(() => setEventYear(2026))
+      .catch(() => setEventYear(tournament.year))
   }, [])
 
   const handleLogout = async () => {
@@ -44,8 +49,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex h-16 items-center justify-center border-b border-green-700">
         <Link href="/admin" className="flex items-center gap-2">
-          <span className="text-2xl">🐸</span>
-          <span className="text-xl font-bold">Frogman Classic</span>
+          <span className="text-2xl">{branding.logoEmoji}</span>
+          <span className="text-xl font-bold">{tournament.name}</span>
         </Link>
       </div>
 

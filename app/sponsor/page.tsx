@@ -1,16 +1,51 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CheckCircle2, Check, Info, ArrowLeft } from 'lucide-react'
-import { sponsorshipPackages, getPackageById, formatPrice, getEntryDescription } from '@/lib/sponsorship-packages'
+import { CheckCircle2, Check, Info, ArrowLeft, RefreshCw } from 'lucide-react'
 import { SponsorshipPackagesModal } from '@/components/sponsorship-packages-modal'
-import type { PaymentMethod, SponsorshipPackage } from '@/lib/types'
+import type { PaymentMethod } from '@/lib/types'
+
+interface SponsorshipPackageDB {
+  id: string
+  name: string
+  price: number
+  included_entries: number
+  dinner_tables: number
+  seal_play: 'none' | 'one' | 'both'
+  benefits: string[]
+  display_order: number
+  is_active: boolean
+}
+
+function formatPrice(price: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price)
+}
+
+function getEntryDescription(pkg: SponsorshipPackageDB): string {
+  if (pkg.included_entries === 0) {
+    return 'No team entries included'
+  }
+  if (pkg.included_entries === 1) {
+    // Check benefits to determine if it's ONE or BOTH events
+    const hasBoth = pkg.benefits.some((b) => b.toLowerCase().includes('both'))
+    if (hasBoth) {
+      return 'Includes entry for a team into BOTH Frogman events'
+    }
+    return 'Includes entry for a team into ONE Frogman event'
+  }
+  return `Includes (${pkg.included_entries}) team entries`
+}
 
 interface FormData {
   companyName: string
@@ -35,6 +70,8 @@ const paymentMethods: { value: PaymentMethod; label: string }[] = [
 ]
 
 export default function SponsorSignupPage() {
+  const [packages, setPackages] = useState<SponsorshipPackageDB[]>([])
+  const [packagesLoading, setPackagesLoading] = useState(true)
   const [formData, setFormData] = useState<FormData>({
     companyName: '',
     contactName: '',
@@ -46,9 +83,33 @@ export default function SponsorSignupPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<SuccessData | null>(null)
 
+  // Load packages from API
+  const fetchPackages = useCallback(async () => {
+    try {
+      setPackagesLoading(true)
+      const response = await fetch('/api/packages')
+      if (response.ok) {
+        const data = await response.json()
+        // Only show active packages, sorted by display order
+        const activePackages = (data.packages || [])
+          .filter((p: SponsorshipPackageDB) => p.is_active)
+          .sort((a: SponsorshipPackageDB, b: SponsorshipPackageDB) => a.display_order - b.display_order)
+        setPackages(activePackages)
+      }
+    } catch (err) {
+      console.error('Failed to load packages:', err)
+    } finally {
+      setPackagesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPackages()
+  }, [fetchPackages])
+
   const selectedPackage = useMemo(() => {
-    return formData.packageId ? getPackageById(formData.packageId) : null
-  }, [formData.packageId])
+    return formData.packageId ? packages.find(p => p.id === formData.packageId) : null
+  }, [formData.packageId, packages])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -202,21 +263,27 @@ export default function SponsorSignupPage() {
                     }
                   />
                 </div>
-                <Select
-                  value={formData.packageId}
-                  onValueChange={(value) => setFormData({ ...formData, packageId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a sponsorship package" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sponsorshipPackages.map((pkg) => (
-                      <SelectItem key={pkg.id} value={pkg.id}>
-                        {pkg.name} – {formatPrice(pkg.price)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {packagesLoading ? (
+                  <div className="flex items-center justify-center h-10 border rounded-md">
+                    <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.packageId}
+                    onValueChange={(value) => setFormData({ ...formData, packageId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a sponsorship package" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {packages.map((pkg) => (
+                        <SelectItem key={pkg.id} value={pkg.id}>
+                          {pkg.name} – {formatPrice(pkg.price)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Package Details Preview */}
@@ -256,7 +323,7 @@ export default function SponsorSignupPage() {
               </div>
 
               {/* Info about team entries */}
-              {selectedPackage && selectedPackage.includedEntries > 0 && (
+              {selectedPackage && selectedPackage.included_entries > 0 && (
                 <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
                   <p className="text-sm text-gray-600">
                     After registering, you&apos;ll receive an email with a link to manage your included team entries.
@@ -285,7 +352,7 @@ export default function SponsorSignupPage() {
   )
 }
 
-function PackageDetailsPreview({ pkg }: { pkg: SponsorshipPackage }) {
+function PackageDetailsPreview({ pkg }: { pkg: SponsorshipPackageDB }) {
   const entryDescription = getEntryDescription(pkg)
 
   return (
@@ -307,7 +374,7 @@ function PackageDetailsPreview({ pkg }: { pkg: SponsorshipPackage }) {
         </ul>
       </div>
 
-      {pkg.includedEntries > 0 && (
+      {pkg.included_entries > 0 && (
         <div className="pt-2 border-t border-green-200">
           <p className="text-sm text-green-700">
             <strong>{entryDescription}</strong>

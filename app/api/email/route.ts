@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { sponsorWelcomeEmail, captainCodeEmail, teamConfirmationEmail } from '@/lib/email-templates'
+import { getFromEmail } from '@/lib/config/tournament.config'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const FROM_EMAIL = 'Frogman Classic <noreply@frogmanclassic.com>'
+const FROM_EMAIL = getFromEmail()
 
 export async function POST(request: NextRequest) {
   try {

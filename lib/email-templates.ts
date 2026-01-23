@@ -1,3 +1,5 @@
+import { tournamentConfig, getTournamentFullName } from '@/lib/config/tournament.config'
+
 interface SponsorWelcomeData {
   sponsorName: string;
   contactName: string;
@@ -32,11 +34,15 @@ function formatPrice(price: number): string {
   }).format(price);
 }
 
+// Config shortcuts
+const { tournament, contact, sponsorship, branding, events } = tournamentConfig
+
 
 export function sponsorWelcomeEmail(data: SponsorWelcomeData): {
   subject: string;
   html: string;
 } {
+  const fullName = getTournamentFullName()
   const benefitsHtml = data.benefits
     .map((benefit) => `<li style="padding: 4px 0;">${benefit}</li>`)
     .join("");
@@ -57,14 +63,14 @@ export function sponsorWelcomeEmail(data: SponsorWelcomeData): {
       <h2 style="color: #166534; margin-top: 32px;">Payment</h2>
       <p>Additional payment options are coming soon. If you need to pay now, checks are accepted:</p>
       <p style="margin-left: 16px;">
-        <strong>Check:</strong> Make payable to "Frogman Classic"<br>
+        <strong>Check:</strong> Make payable to "${sponsorship.checkPayableTo}"<br>
         <span style="color: #666; font-size: 14px;">Please include "${data.sponsorName}" in the memo.</span>
       </p>
       <p style="font-size: 14px; color: #666;">We'll reach out with more payment options shortly.</p>
     `;
 
   return {
-    subject: `Thank You for Your Frogman Classic 2026 Sponsorship`,
+    subject: `Thank You for Your ${fullName} Sponsorship`,
     html: `
 <!DOCTYPE html>
 <html>
@@ -74,13 +80,13 @@ export function sponsorWelcomeEmail(data: SponsorWelcomeData): {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="text-align: center; margin-bottom: 32px;">
-    <h1 style="color: #166534; margin: 0;">Frogman Classic 2026</h1>
+    <h1 style="color: #166534; margin: 0;">${fullName}</h1>
     <p style="color: #666; margin-top: 8px;">Thank you for your sponsorship!</p>
   </div>
 
   <p>Dear ${data.contactName},</p>
 
-  <p>Thank you for registering <strong>${data.sponsorName}</strong> as a sponsor for the Frogman Classic 2026. Your support helps veterans and we're honored to have you.</p>
+  <p>Thank you for registering <strong>${data.sponsorName}</strong> as a sponsor for the ${fullName}. Your support helps veterans and we're honored to have you.</p>
 
   <h2 style="color: #166534; margin-top: 32px;">Your Sponsorship Package</h2>
   <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 20px; margin: 16px 0;">
@@ -98,12 +104,12 @@ export function sponsorWelcomeEmail(data: SponsorWelcomeData): {
   ${paymentSection}
 
   <h2 style="color: #166534; margin-top: 32px;">Questions?</h2>
-  <p>Reply to this email or contact us at <a href="mailto:info@frogmanclassic.com" style="color: #166534;">info@frogmanclassic.com</a>.</p>
+  <p>Reply to this email or contact us at <a href="mailto:${contact.infoEmail}" style="color: #166534;">${contact.infoEmail}</a>.</p>
 
   <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
 
   <p style="color: #999; font-size: 12px; text-align: center;">
-    Frogman Classic - Supporting Veterans
+    ${tournament.name} - ${branding.footerTagline}
   </p>
 </body>
 </html>
@@ -115,8 +121,10 @@ export function captainCodeEmail(data: CaptainCodeData): {
   subject: string;
   html: string;
 } {
+  const fullName = getTournamentFullName()
+
   return {
-    subject: `Your Frogman Classic 2026 Team Registration Link`,
+    subject: `Your ${fullName} Team Registration Link`,
     html: `
 <!DOCTYPE html>
 <html>
@@ -126,11 +134,11 @@ export function captainCodeEmail(data: CaptainCodeData): {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="text-align: center; margin-bottom: 32px;">
-    <h1 style="color: #166534; margin: 0;">Frogman Classic 2026</h1>
+    <h1 style="color: #166534; margin: 0;">${fullName}</h1>
     <p style="color: #666; margin-top: 8px;">Team Registration</p>
   </div>
 
-  <p>You've been invited to register a team for the Frogman Classic 2026, sponsored by <strong>${data.sponsorName}</strong>.</p>
+  <p>You've been invited to register a team for the ${fullName}, sponsored by <strong>${data.sponsorName}</strong>.</p>
 
   <p>Click the button below to register your team:</p>
 
@@ -145,17 +153,17 @@ export function captainCodeEmail(data: CaptainCodeData): {
   </ul>
 
   <p style="margin-top: 24px; padding: 12px 16px; background: #fef3c7; border-radius: 6px; font-size: 14px;">
-    <strong>Note:</strong> This link can only be used once. Team entries can be used for the Friday Florida Scramble OR the Saturday/Sunday 2-man Best Ball.
+    <strong>Note:</strong> This link can only be used once. Team entries can be used for the ${events.friday.name} OR the ${events.satSun.name}.
   </p>
 
   <p style="margin-top: 32px; color: #666; font-size: 14px;">
-    Questions? Contact your sponsor or reach out to Drew Goodman (drew@gameincgc.com).
+    Questions? Contact your sponsor or reach out to ${contact.directorName} (${contact.directorEmail}).
   </p>
 
   <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
 
   <p style="color: #999; font-size: 12px; text-align: center;">
-    Frogman Classic - Supporting Veterans
+    ${tournament.name} - ${branding.footerTagline}
   </p>
 </body>
 </html>
@@ -167,14 +175,15 @@ export function teamConfirmationEmail(data: TeamConfirmationData): {
   subject: string;
   html: string;
 } {
+  const fullName = getTournamentFullName()
   const eventLabel =
     data.eventType === "friday" ? "Friday Event" : "Saturday/Sunday Event";
   const isFriday = data.eventType === "friday";
 
   // For Friday, mention team name. For Sat/Sun, just say "You have been registered"
   const introLine = isFriday
-    ? `Your team <strong>${data.teamName}</strong> has been successfully registered for the Frogman Classic 2026.`
-    : `You have been successfully registered for the Frogman Classic 2026.`;
+    ? `Your team <strong>${data.teamName}</strong> has been successfully registered for the ${fullName}.`
+    : `You have been successfully registered for the ${fullName}.`;
 
   // Only show sponsor row if there's actually a sponsor
   const sponsorRow = data.sponsorName
@@ -193,7 +202,7 @@ export function teamConfirmationEmail(data: TeamConfirmationData): {
     : "";
 
   return {
-    subject: `Team Registration Confirmed - Frogman Classic 2026`,
+    subject: `Team Registration Confirmed - ${fullName}`,
     html: `
 <!DOCTYPE html>
 <html>
@@ -203,7 +212,7 @@ export function teamConfirmationEmail(data: TeamConfirmationData): {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="text-align: center; margin-bottom: 32px;">
-    <h1 style="color: #166534; margin: 0;">Frogman Classic 2026</h1>
+    <h1 style="color: #166534; margin: 0;">${fullName}</h1>
     <p style="color: #666; margin-top: 8px;">Registration Confirmed!</p>
   </div>
 
@@ -237,13 +246,13 @@ export function teamConfirmationEmail(data: TeamConfirmationData): {
   </ul>
 
   <p style="margin-top: 32px; color: #666; font-size: 14px;">
-    Questions or changes? Contact Drew Goodman at <a href="mailto:drew@gameincgc.com" style="color: #166534;">drew@gameincgc.com</a>.
+    Questions or changes? Contact ${contact.directorName} at <a href="mailto:${contact.directorEmail}" style="color: #166534;">${contact.directorEmail}</a>.
   </p>
 
   <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
 
   <p style="color: #999; font-size: 12px; text-align: center;">
-    Frogman Classic - Supporting Navy SEAL Families
+    ${tournament.name} - ${branding.footerTaglineAlt}
   </p>
 </body>
 </html>
