@@ -50,20 +50,22 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="text-lg px-8">
-              <Link href="/register">
-                <Users className="w-5 h-5 mr-2" />
-                Register Your Team
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="text-lg px-8">
-              <Link href="/sponsor">
-                <Heart className="w-5 h-5 mr-2" />
-                Become a Sponsor
-              </Link>
-            </Button>
-          </div>
+          {false && (
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button asChild size="lg" className="text-lg px-8">
+                <Link href="/register">
+                  <Users className="w-5 h-5 mr-2" />
+                  Register Your Team
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="text-lg px-8">
+                <Link href="/sponsor">
+                  <Heart className="w-5 h-5 mr-2" />
+                  Become a Sponsor
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -165,7 +167,7 @@ export default function Home() {
             Sponsorship packages start at ${sponsorship.startingPrice} and include benefits like team entries,
             banner placement, dinner tables, and more.
           </p>
-          <SponsorshipPackagesModal />
+          <SponsorshipPackagesModal showCta={false} />
         </div>
       </section>
 
@@ -182,12 +184,16 @@ export default function Home() {
             <span className="text-gray-600 font-medium">{fullName}</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-gray-500">
-            <Link href="/sponsor" className="hover:text-green-600 transition-colors">
-              Sponsors
-            </Link>
-            <Link href="/register" className="hover:text-green-600 transition-colors">
-              Register
-            </Link>
+            {false && (
+              <>
+                <Link href="/sponsor" className="hover:text-green-600 transition-colors">
+                  Sponsors
+                </Link>
+                <Link href="/register" className="hover:text-green-600 transition-colors">
+                  Register
+                </Link>
+              </>
+            )}
             <Link href="/admin" className="hover:text-green-600 transition-colors">
               Admin
             </Link>
